@@ -9,7 +9,7 @@ from telegramSend import start_monitoring
 
 CONFIG_FILE = 'config.json'
 BOT_TOKEN = '7759050359:AAF4tx3FUZWpBkkyuIK_miihDtzfP39WoCM'
-CHAT_ID = ['6088271522','5491210881']
+CHAT_ID = ['6088271522', '5491210881']
 DIRECTORY_TO_MONITOR = "./recordings"
 
 def list_com_ports():
@@ -18,41 +18,20 @@ def list_com_ports():
     ports = [port.device for port in serial.tools.list_ports.comports()]
     return ports
 
-def list_audio_devices():
-    """List available audio input and output devices."""
+def list_audio_input_devices():
+    """List available audio input devices."""
     p = pyaudio.PyAudio()
     info = p.get_host_api_info_by_index(0)
     numdevices = info.get('deviceCount')
 
     input_devices = {}
-    output_devices = {}
-
-    # List input devices
-    for i in range(0, numdevices):
+    for i in range(numdevices):
         device_info = p.get_device_info_by_host_api_device_index(0, i)
         if device_info.get('maxInputChannels') > 0:
             input_devices[i] = device_info.get('name')
 
-    # List output devices
-    for i in range(0, numdevices):
-        device_info = p.get_device_info_by_host_api_device_index(0, i)
-        if device_info.get('maxOutputChannels') > 0:
-            output_devices[i] = device_info.get('name')
-
     p.terminate()
-
-    return input_devices, output_devices
-
-def get_device_name(p, device_id, is_input=True):
-    """Get the device name based on the device ID."""
-    device_info = p.get_device_info_by_index(device_id)
-    if is_input:
-        if device_info['maxInputChannels'] > 0:
-            return device_info['name']
-    else:
-        if device_info['maxOutputChannels'] > 0:
-            return device_info['name']
-    return None
+    return input_devices
 
 def select_comport():
     """Prompt user to select a COM port."""
@@ -71,19 +50,17 @@ def select_comport():
     answers = prompt(questions)
     return answers['com_port'] if answers else None
 
-def select_audio_devices(saved_input_device_id=None, saved_output_device_id=None):
-    """Prompt user to select audio input and output devices or use saved ones."""
-    input_devices, output_devices = list_audio_devices()
+def select_audio_input_device(saved_input_device_id=None):
+    """Prompt user to select an audio input device or use saved one."""
+    input_devices = list_audio_input_devices()
 
-    if not input_devices or not output_devices:
-        print("No audio devices found.")
-        return None, None
+    if not input_devices:
+        print("No audio input devices found.")
+        return None
 
-    # If saved IDs exist, use them
-    if saved_input_device_id in input_devices and saved_output_device_id in output_devices:
-        input_device = input_devices[saved_input_device_id]
-        output_device = output_devices[saved_output_device_id]
-        return input_device, output_device
+    # If a saved ID exists, use it
+    if saved_input_device_id in input_devices:
+        return saved_input_device_id
 
     questions = [
         {
@@ -91,28 +68,21 @@ def select_audio_devices(saved_input_device_id=None, saved_output_device_id=None
             'name': 'input_device',
             'message': 'Select the audio input device:',
             'choices': list(input_devices.values()),
-        },
-        {
-            'type': 'list',
-            'name': 'output_device',
-            'message': 'Select the audio output device:',
-            'choices': list(output_devices.values()),
         }
     ]
     answers = prompt(questions)
 
-    # Get the continuous numeric IDs for the selected devices
+    # Get the numeric ID for the selected device
     input_device_id = next(id for id, name in input_devices.items() if name == answers['input_device'])
-    output_device_id = next(id for id, name in output_devices.items() if name == answers['output_device'])
 
-    return input_device_id, output_device_id
+    return input_device_id
 
 def save_config(config):
     """Save the configuration to a JSON file with UTF-8 encoding."""
     with open(CONFIG_FILE, 'w', encoding='utf-8') as file:
         json.dump(config, file, indent=4, ensure_ascii=False)
 
-def monitor_and_record(com_port, input_device_id, output_device_id):
+def monitor_and_record(com_port, input_device_id):
     """Function to handle both monitoring and recording in parallel."""
     # Start the Telegram monitoring in a separate thread
     monitor_thread = threading.Thread(
@@ -124,11 +94,9 @@ def monitor_and_record(com_port, input_device_id, output_device_id):
 
     # Initialize PyAudio
     p = pyaudio.PyAudio()
-    input_device_name = get_device_name(p, input_device_id, is_input=True)
-    output_device_name = get_device_name(p, output_device_id, is_input=False)
+    input_device_name = p.get_device_info_by_index(input_device_id)['name']
 
     print(f"Using input device: {input_device_name}")
-    print(f"Using output device: {output_device_name}")
 
     try:
         # Open the serial port
@@ -164,25 +132,23 @@ def main():
             print("No COM port selected, exiting.")
             return
 
-        # Select audio input and output devices
-        input_device_id, output_device_id = select_audio_devices()
-        if input_device_id is None or output_device_id is None:
-            print("Audio devices not selected, exiting.")
+        # Select audio input device
+        input_device_id = select_audio_input_device()
+        if input_device_id is None:
+            print("Audio input device not selected, exiting.")
             return
 
         # Save configuration
         config = {
             'com_port': com_port,
-            'input_device': input_device_id,
-            'output_device': output_device_id
+            'input_device': input_device_id
         }
         save_config(config)
     else:
         com_port = config['com_port']
         input_device_id = config['input_device']
-        output_device_id = config['output_device']
 
-    monitor_and_record(com_port, input_device_id, output_device_id)
+    monitor_and_record(com_port, input_device_id)
 
 if __name__ == "__main__":
     main()

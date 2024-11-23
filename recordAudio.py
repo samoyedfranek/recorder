@@ -16,7 +16,6 @@ def record(filename):
 
     config = load_config()
     input_device_id = config["input_device"]
-    output_device_id = config["output_device"]
 
     CHUNK = 1024
     FORMAT = pyaudio.paInt16
