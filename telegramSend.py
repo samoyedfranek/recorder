@@ -68,43 +68,10 @@ def send_to_telegram(file_path, bot_token, chat_id):
                 print(f"Failed to send file to chat ID {chat_ids}: {response.status_code} - {response.text}")
         
         # Wait for 5 seconds before deleting the file
-        time.sleep(3)
+        time.sleep(5)
         
         # Delete the file after sending it
         os.remove(new_file_path)
         print(f"File deleted: {new_file_name}")
     except Exception as e:
         print(f"Error sending file to Telegram: {e}")
-
-def monitor_directory(directory, bot_token, chat_id):
-    """Monitor a directory for new audio files and send them to Telegram."""
-    sent_files = set()
-
-    while True:
-        try:
-            # List all files in the directory with '.wav' extension
-            files = {f for f in os.listdir(directory) if f.endswith('.wav')}
-            
-            # Find new files that haven't been sent yet
-            new_files = files - sent_files
-            
-            for file_name in new_files:
-                file_path = os.path.join(directory, file_name)
-                print(f"New file detected: {file_name}")
-                send_to_telegram(file_path, bot_token, chat_id)
-                sent_files.add(file_name)
-            
-            time.sleep(5)  # Check for new files every 5 seconds
-        except KeyboardInterrupt:
-            print("Stopped monitoring directory.")
-            break
-        except Exception as e:
-            print(f"Error while monitoring directory: {e}")
-
-def start_monitoring(directory, bot_token, chat_id):
-    """
-    Function to start monitoring a directory for new audio files
-    and send them to Telegram.
-    """
-    print(f"Monitoring directory: {directory} for new audio files.")
-    monitor_directory(directory, bot_token, chat_id)
