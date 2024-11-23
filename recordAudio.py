@@ -7,7 +7,6 @@ from threading import Thread
 from datetime import datetime
 import pyaudio
 from googleDrive import authenticate_google_drive, upload_to_google_drive
-import numpy as np
 
 def record(filename):
     # Load configuration from JSON
@@ -43,12 +42,9 @@ def record(filename):
     def is_silent(data):
         # Unpack the audio data into integers
         audio_data = wave.struct.unpack("%dh" % (len(data) // 2), data)
-        return max(abs(i) for i in audio_data) < SILENCE_THRESHOLD
-
-    def log_threshold(audio_data):
-        # Calculate the RMS (Root Mean Square) to estimate the volume level
-        rms = np.sqrt(np.mean(np.square(audio_data)))
-        print(f"Threshold RMS value: {rms:.2f}")
+        max_amplitude = max(abs(i) for i in audio_data)
+        print(f"Max amplitude: {max_amplitude}")  # Debug: print the max amplitude
+        return max_amplitude < SILENCE_THRESHOLD
 
     def record_audio():
         p = pyaudio.PyAudio()
@@ -60,24 +56,11 @@ def record(filename):
         frames = []
         silent_chunks = 0
         recording = False
-        start_time = time.time()
-        data_buffer = []
 
         while True:
             try:
                 # Read audio data from the input stream
                 data = input_stream.read(CHUNK, exception_on_overflow=False)
-                audio_data = wave.struct.unpack("%dh" % (len(data) // 2), data)
-                data_buffer.append(audio_data)
-
-                # Log threshold every second
-                if time.time() - start_time >= 1:
-                    # Flatten the data buffer and log threshold
-                    all_data = np.concatenate(data_buffer)
-                    log_threshold(all_data)
-                    data_buffer.clear()
-                    start_time = time.time()
-
             except IOError as e:
                 print(f"Error reading audio data: {e}")
                 continue
@@ -122,4 +105,3 @@ def record(filename):
         upload_thread.join()
     except Exception as e:
         print(f"Error: {e}")
-
