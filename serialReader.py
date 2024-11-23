@@ -13,7 +13,7 @@ def open_serial_port(serial_port):
 
                 # Convert filtered bytes to a string
                 printable_str = ''.join([chr(byte) for byte in printable_data])
-                print(f"Received printable data: {printable_str}")
+                # print(f"Received printable data: {printable_str}")
                 
                 # Define the start marker
                 start_marker = "II"
@@ -52,4 +52,4 @@ if __name__ == "__main__":
     
     # Call the function with the serial port
     extracted_data = open_serial_port(serial_port)
-    print(f"Extracted data: {extracted_data}")
+    # print(f"Extracted data: {extracted_data}")

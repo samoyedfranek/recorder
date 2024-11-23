@@ -44,7 +44,11 @@ def record(filename):
 
     def record_audio():
         p = pyaudio.PyAudio()
-        input_stream = p.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, input_device_index=input_device_id, frames_per_buffer=CHUNK)
+        try:
+            input_stream = p.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, input_device_index=input_device_id, frames_per_buffer=CHUNK)
+        except IOError as e:
+            print(f"Error opening audio stream: {e}")
+            return
 
         print("Listening for sound...")
         frames = []
@@ -52,7 +56,12 @@ def record(filename):
         recording = False
 
         while True:
-            data = input_stream.read(CHUNK, exception_on_overflow=False)
+            try:
+                data = input_stream.read(CHUNK, exception_on_overflow=False)
+            except IOError as e:
+                print(f"Error reading audio data: {e}")
+                continue
+
             audio_data = wave.struct.unpack("%dh" % (len(data) // 2), data)
 
             if not is_silent(audio_data):
@@ -71,6 +80,7 @@ def record(filename):
                     file_path = save_audio_file(frames, file_name)
                     upload_queue.put(file_path)
                     frames.clear()
+
 
     def process_uploads(service):
         while True:
