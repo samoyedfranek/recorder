@@ -94,25 +94,30 @@ def monitor_and_record(com_port, input_device_id):
 
     # Initialize PyAudio
     p = pyaudio.PyAudio()
-    input_device_name = p.get_device_info_by_index(input_device_id)['name']
-
-    print(f"Using input device: {input_device_name}")
 
     try:
+        # Check if the input device ID is valid
+        input_device_info = p.get_device_info_by_index(input_device_id)
+        input_device_name = input_device_info['name']
+        print(f"Using input device: {input_device_name}")
+
         # Open the serial port
         serial_port = serial.Serial(com_port, 38400, timeout=0)
         print(f"Successfully opened serial port: {com_port}, using Quansheng mode...")
-        
+
         # Attempt to open serial port and record
         serial_connection = open_serial_port(serial_port)
         if serial_connection:
-            # Pass the appropriate arguments to the record function
-            record("radio")  # Pass the file name or any appropriate identifier for the recording
+            print("Serial connection established, starting recording.")
+            # Pass the appropriate arguments to the record function in a separate thread
+            record_thread = threading.Thread(target=record, args=("radio",)) 
+            record_thread.start()
         else:
             print("Failed to initialize serial connection.")
     
     except serial.SerialException as e:
         print(f"Error opening serial port {com_port}: {e}, switching to normal mode...")
+        print("Attempting to record without serial connection.")
         record("radio")
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
