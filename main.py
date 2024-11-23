@@ -108,8 +108,14 @@ def monitor_and_record(com_port, input_device_id):
         if serial_connection:
             record(serial_connection)
         else:
-            print(f"Error opening serial port {com_port}: {e}, switching to normal mode...")
+            print(f"Error opening serial port {com_port}, switching to normal mode...")
             record("radio")
+    
+    except serial.SerialException as e:
+        print(f"Error opening serial port {com_port}: {e}, switching to normal mode...")
+        record("radio")
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
 
 def main():
     # Load saved configuration if available
