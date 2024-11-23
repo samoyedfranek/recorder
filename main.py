@@ -1,9 +1,7 @@
 import threading
 import json
-import serial
 import pyaudio
 from PyInquirer import prompt
-from serialReader import open_serial_port
 from recordAudio import record
 from telegramSend import start_monitoring
 
@@ -11,12 +9,6 @@ CONFIG_FILE = 'config.json'
 BOT_TOKEN = 'YOUR_BOT_TOKEN'
 CHAT_ID = ['CHAT_ID_1', 'CHAT_ID_2']
 DIRECTORY_TO_MONITOR = "./recordings"
-
-def list_com_ports():
-    """List available serial ports on Linux."""
-    import serial.tools.list_ports
-    ports = [port.device for port in serial.tools.list_ports.comports()]
-    return ports
 
 def list_audio_input_devices():
     """List available audio input devices."""
@@ -32,23 +24,6 @@ def list_audio_input_devices():
 
     p.terminate()
     return input_devices
-
-def select_comport():
-    """Prompt user to select a serial port."""
-    com_ports = list_com_ports()
-    if not com_ports:
-        print("No COM ports found.")
-        return None
-    questions = [
-        {
-            'type': 'list',
-            'name': 'com_port',
-            'message': 'Select the COM port:',
-            'choices': com_ports,
-        }
-    ]
-    answers = prompt(questions)
-    return answers['com_port'] if answers else None
 
 def select_audio_input_device(saved_input_device_id=None):
     """Prompt user to select an audio input device or use the saved one."""
@@ -82,7 +57,7 @@ def save_config(config):
     with open(CONFIG_FILE, 'w', encoding='utf-8') as file:
         json.dump(config, file, indent=4, ensure_ascii=False)
 
-def monitor_and_record(com_port, input_device_id):
+def monitor_and_record(input_device_id):
     """Handle monitoring and recording in parallel."""
     # Start the Telegram monitoring in a separate thread
     monitor_thread = threading.Thread(
@@ -101,24 +76,11 @@ def monitor_and_record(com_port, input_device_id):
         input_device_name = input_device_info['name']
         print(f"Using input device: {input_device_name}")
 
-        # Open the serial port
-        serial_port = serial.Serial(com_port, 38400, timeout=0)
-        print(f"Successfully opened serial port: {com_port}, using Quansheng mode...")
+        # Start recording
+        print("Starting recording...")
+        record_thread = threading.Thread(target=record, args=("radio",)) 
+        record_thread.start()
 
-        # Attempt to open serial port and record
-        serial_connection = open_serial_port(serial_port)
-        if serial_connection:
-            print("Serial connection established, starting recording.")
-            # Pass the appropriate arguments to the record function in a separate thread
-            record_thread = threading.Thread(target=record, args=("radio",)) 
-            record_thread.start()
-        else:
-            print("Failed to initialize serial connection.")
-    
-    except serial.SerialException as e:
-        print(f"Error opening serial port {com_port}: {e}, switching to normal mode...")
-        print("Attempting to record without serial connection.")
-        record("radio")
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
 
@@ -132,12 +94,6 @@ def main():
 
     # If config is not available or is invalid, prompt for selection
     if not config:
-        # Select COM port
-        com_port = select_comport()
-        if not com_port:
-            print("No COM port selected, exiting.")
-            return
-
         # Select audio input device
         input_device_id = select_audio_input_device()
         if input_device_id is None:
@@ -146,15 +102,13 @@ def main():
 
         # Save configuration
         config = {
-            'com_port': com_port,
             'input_device': input_device_id
         }
         save_config(config)
     else:
-        com_port = config['com_port']
         input_device_id = config['input_device']
 
-    monitor_and_record(com_port, input_device_id)
+    monitor_and_record(input_device_id)
 
 if __name__ == "__main__":
     main()
