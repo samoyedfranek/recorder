@@ -21,7 +21,7 @@ def record(filename):
     FORMAT = pyaudio.paInt16
     CHANNELS = 1
     RATE = 48000
-    SILENCE_THRESHOLD = 500
+    SILENCE_THRESHOLD = 800
     SILENCE_DURATION = 5
 
     LOCAL_STORAGE_PATH = "./recordings"
