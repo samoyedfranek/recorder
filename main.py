@@ -8,12 +8,12 @@ from recordAudio import record
 from telegramSend import start_monitoring
 
 CONFIG_FILE = 'config.json'
-BOT_TOKEN = '7759050359:AAF4tx3FUZWpBkkyuIK_miihDtzfP39WoCM'
-CHAT_ID = ['6088271522', '5491210881']
+BOT_TOKEN = 'YOUR_BOT_TOKEN'
+CHAT_ID = ['CHAT_ID_1', 'CHAT_ID_2']
 DIRECTORY_TO_MONITOR = "./recordings"
 
 def list_com_ports():
-    """List available serial ports."""
+    """List available serial ports on Linux."""
     import serial.tools.list_ports
     ports = [port.device for port in serial.tools.list_ports.comports()]
     return ports
@@ -34,7 +34,7 @@ def list_audio_input_devices():
     return input_devices
 
 def select_comport():
-    """Prompt user to select a COM port."""
+    """Prompt user to select a serial port."""
     com_ports = list_com_ports()
     if not com_ports:
         print("No COM ports found.")
@@ -51,7 +51,7 @@ def select_comport():
     return answers['com_port'] if answers else None
 
 def select_audio_input_device(saved_input_device_id=None):
-    """Prompt user to select an audio input device or use saved one."""
+    """Prompt user to select an audio input device or use the saved one."""
     input_devices = list_audio_input_devices()
 
     if not input_devices:
@@ -78,12 +78,12 @@ def select_audio_input_device(saved_input_device_id=None):
     return input_device_id
 
 def save_config(config):
-    """Save the configuration to a JSON file with UTF-8 encoding."""
+    """Save the configuration to a JSON file."""
     with open(CONFIG_FILE, 'w', encoding='utf-8') as file:
         json.dump(config, file, indent=4, ensure_ascii=False)
 
 def monitor_and_record(com_port, input_device_id):
-    """Function to handle both monitoring and recording in parallel."""
+    """Handle monitoring and recording in parallel."""
     # Start the Telegram monitoring in a separate thread
     monitor_thread = threading.Thread(
         target=start_monitoring, 
