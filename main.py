@@ -98,23 +98,18 @@ def monitor_and_record(com_port, input_device_id):
 
     print(f"Using input device: {input_device_name}")
 
-    try:
-        # Open the serial port
-        serial_port = serial.Serial(com_port, 38400, timeout=0)
-        print(f"Successfully opened serial port: {com_port}, using Quansheng mode...")
-        
-        # Attempt to open serial port and record
-        serial_connection = open_serial_port(serial_port)
-        if serial_connection:
-            record(serial_connection)
-        else:
-            print(f"Error opening serial port {com_port}, switching to normal mode...")
-            record("radio")
 
-    except serial.SerialException as e:
-        print(f"SerialException: {e}")
-    except Exception as e:
-        print(f"An unexpected error occurred: {e}")
+    # Open the serial port
+    serial_port = serial.Serial(com_port, 38400, timeout=0)
+    print(f"Successfully opened serial port: {com_port}, using Quansheng mode...")
+    
+    # Attempt to open serial port and record
+    serial_connection = open_serial_port(serial_port)
+    if serial_connection:
+        record(serial_connection)
+    else:
+        print(f"Error opening serial port {com_port}, switching to normal mode...")
+        record("radio")
 
 def main():
     # Load saved configuration if available
