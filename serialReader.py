@@ -1,5 +1,6 @@
 import serial
 import json
+import time
 
 # Function to open the serial port and extract data
 def open_serial_port(serial_port):
