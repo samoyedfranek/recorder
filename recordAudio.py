@@ -91,7 +91,6 @@ def record(filename):
                 break
             # Upload the file to Google Drive
             upload_to_google_drive(file_path, '1eEMhEHFETEi8uQec5OhrmWdF-RZfxUAy', service)
-            print(f"File uploaded to Google Drive: {file_path}")
             
             # Wait 5 seconds before sending the Telegram message
             time.sleep(5)
