@@ -12,7 +12,7 @@ def open_serial_port(serial_port):
 
                 # Convert filtered bytes to a string
                 printable_str = ''.join([chr(byte) for byte in printable_data])
-                # print(f"Received printable data: {printable_str}")
+                print(f"Received printable data: {printable_str}")
                 
                 # Define the start marker
                 start_marker = "II"
@@ -40,7 +40,7 @@ def open_serial_port(serial_port):
 if __name__ == "__main__":
     # Open the serial port (this would be done in the calling file)
     COM_PORT = "COM10"  # Adjust if needed
-    serial_port = serialReader.Serial(COM_PORT, 38400, timeout=0.5)
+    serial_port = serialReader.Serial(COM_PORT, 38400, timeout=0)
     
     # Call the function with the serial port
     extracted_data = open_serial_port(serial_port)

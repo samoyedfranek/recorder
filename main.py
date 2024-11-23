@@ -9,7 +9,7 @@ from telegramSend import start_monitoring
 
 CONFIG_FILE = 'config.json'
 BOT_TOKEN = '7759050359:AAF4tx3FUZWpBkkyuIK_miihDtzfP39WoCM'
-CHAT_ID = '5491210881'
+CHAT_ID = ['6088271522','5491210881']
 DIRECTORY_TO_MONITOR = "./recordings"
 
 def list_com_ports():

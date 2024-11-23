@@ -49,28 +49,30 @@ def send_to_telegram(file_path, bot_token, chat_id):
     
     # Escape special characters for MarkdownV2
     caption_escaped = caption.replace('.', '\\.').replace('-', '\\-')
-    
+
+
     try:
-        with open(new_file_path, 'rb') as audio_file:
-            files = {'audio': audio_file}
-            data = {
-                'chat_id': chat_id,
-                'caption': caption_escaped,
-                'parse_mode': 'MarkdownV2'
-            }
-            response = requests.post(url, data=data, files=files)
+        for chat_ids in chat_id:
+            with open(new_file_path, 'rb') as audio_file:
+                files = {'audio': audio_file}
+                data = {
+                    'chat_id': chat_ids,
+                    'caption': caption_escaped,
+                    'parse_mode': 'MarkdownV2'
+                }
+                response = requests.post(url, data=data, files=files)
+            
+            if response.status_code == 200:
+                print(f"File sent to chat ID {chat_ids} successfully: {new_file_name}")
+            else:
+                print(f"Failed to send file to chat ID {chat_ids}: {response.status_code} - {response.text}")
         
-        if response.status_code == 200:
-            print(f"File sent to Telegram successfully: {new_file_name}")
-            
-            # Wait for 5 seconds before deleting the file
-            time.sleep(5)
-            
-            # Delete the file after sending it
-            os.remove(new_file_path)
-            print(f"File deleted: {new_file_name}")
-        else:
-            print(f"Failed to send file to Telegram: {response.status_code} - {response.text}")
+        # Wait for 5 seconds before deleting the file
+        time.sleep(3)
+        
+        # Delete the file after sending it
+        os.remove(new_file_path)
+        print(f"File deleted: {new_file_name}")
     except Exception as e:
         print(f"Error sending file to Telegram: {e}")
 

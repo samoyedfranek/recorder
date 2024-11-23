@@ -43,13 +43,6 @@ def record(filename):
     def is_silent(data):
         return max(data) < SILENCE_THRESHOLD
 
-    def stream_audio(p, output_device_id):
-        stream = p.open(format=FORMAT, channels=CHANNELS, rate=RATE, output=True, output_device_index=output_device_id, frames_per_buffer=CHUNK)
-        while True:
-            if not audio_queue.empty():
-                data = audio_queue.get()
-                stream.write(data)
-
     def record_audio():
         p = pyaudio.PyAudio()
         input_stream = p.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, input_device_index=input_device_id, frames_per_buffer=CHUNK)
@@ -58,9 +51,6 @@ def record(filename):
         frames = []
         silent_chunks = 0
         recording = False
-
-        audio_thread = Thread(target=stream_audio, args=(p, output_device_id), daemon=True)
-        audio_thread.start()
 
         while True:
             data = input_stream.read(CHUNK, exception_on_overflow=False)
