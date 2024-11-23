@@ -106,7 +106,8 @@ def monitor_and_record(com_port, input_device_id):
         # Attempt to open serial port and record
         serial_connection = open_serial_port(serial_port)
         if serial_connection:
-            record(serial_connection)
+            # Pass the appropriate arguments to the record function
+            record("radio")  # Pass the file name or any appropriate identifier for the recording
         else:
             print("Failed to initialize serial connection.")
     

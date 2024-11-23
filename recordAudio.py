@@ -16,7 +16,6 @@ def record(filename):
 
     config = load_config()
     input_device_id = config["input_device"]
-    output_device_id = 0
 
     CHUNK = 1024
     FORMAT = pyaudio.paInt16
@@ -41,17 +40,14 @@ def record(filename):
         return file_path
 
     def is_silent(data):
-        return max(data) < SILENCE_THRESHOLD
-
-    def stream_audio(p, output_device_id):
-        stream = p.open(format=FORMAT, channels=CHANNELS, rate=RATE, output=True, output_device_index=output_device_id, frames_per_buffer=CHUNK)
-        while True:
-            if not audio_queue.empty():
-                data = audio_queue.get()
-                stream.write(data)
+        # Unpack the audio data into integers
+        audio_data = wave.struct.unpack("%dh" % (len(data) // 2), data)
+        return max(abs(i) for i in audio_data) < SILENCE_THRESHOLD
 
     def record_audio():
         p = pyaudio.PyAudio()
+
+        # Open the input stream for recording
         input_stream = p.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, input_device_index=input_device_id, frames_per_buffer=CHUNK)
 
         print("Listening for sound...")
@@ -59,14 +55,16 @@ def record(filename):
         silent_chunks = 0
         recording = False
 
-        audio_thread = Thread(target=stream_audio, args=(p, output_device_id), daemon=True)
-        audio_thread.start()
-
         while True:
-            data = input_stream.read(CHUNK, exception_on_overflow=False)
-            audio_data = wave.struct.unpack("%dh" % (len(data) // 2), data)
+            try:
+                # Read audio data from the input stream
+                data = input_stream.read(CHUNK, exception_on_overflow=False)
+            except IOError as e:
+                print(f"Error reading audio data: {e}")
+                continue
 
-            if not is_silent(audio_data):
+            # Check if the audio is silent
+            if not is_silent(data):
                 if not recording:
                     print("Sound detected, recording started...")
                 recording = True
@@ -75,6 +73,7 @@ def record(filename):
                 audio_queue.put(data)
             elif recording:
                 silent_chunks += 1
+                # If silence is detected for the set duration, stop recording
                 if silent_chunks >= (SILENCE_DURATION * RATE / CHUNK):
                     print("Silence detected, recording stopped.")
                     recording = False
