@@ -1,4 +1,5 @@
 import serialReader
+import json
 
 # Function to open the serial port and extract data
 def open_serial_port(serial_port):
@@ -36,10 +37,17 @@ def open_serial_port(serial_port):
     except Exception as e:
         print(f"Error opening serial port: {e}")
         return None
+    
+    
 
 if __name__ == "__main__":
+    def load_config():
+        with open('config.json', 'r') as f:
+            return json.load(f)
+
+    config = load_config()
     # Open the serial port (this would be done in the calling file)
-    COM_PORT = "COM10"  # Adjust if needed
+    COM_PORT = config["com_port"]  # Adjust if needed
     serial_port = serialReader.Serial(COM_PORT, 38400, timeout=0)
     
     # Call the function with the serial port
