@@ -16,6 +16,7 @@ def record(filename):
 
     config = load_config()
     input_device_id = config["input_device"]
+    output_device_id = 0
 
     CHUNK = 1024
     FORMAT = pyaudio.paInt16
@@ -42,26 +43,27 @@ def record(filename):
     def is_silent(data):
         return max(data) < SILENCE_THRESHOLD
 
+    def stream_audio(p, output_device_id):
+        stream = p.open(format=FORMAT, channels=CHANNELS, rate=RATE, output=True, output_device_index=output_device_id, frames_per_buffer=CHUNK)
+        while True:
+            if not audio_queue.empty():
+                data = audio_queue.get()
+                stream.write(data)
+
     def record_audio():
         p = pyaudio.PyAudio()
-        try:
-            input_stream = p.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, input_device_index=input_device_id, frames_per_buffer=CHUNK)
-        except IOError as e:
-            print(f"Error opening audio stream: {e}")
-            return
+        input_stream = p.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, input_device_index=input_device_id, frames_per_buffer=CHUNK)
 
         print("Listening for sound...")
         frames = []
         silent_chunks = 0
         recording = False
 
-        while True:
-            try:
-                data = input_stream.read(CHUNK, exception_on_overflow=False)
-            except IOError as e:
-                print(f"Error reading audio data: {e}")
-                continue
+        audio_thread = Thread(target=stream_audio, args=(p, output_device_id), daemon=True)
+        audio_thread.start()
 
+        while True:
+            data = input_stream.read(CHUNK, exception_on_overflow=False)
             audio_data = wave.struct.unpack("%dh" % (len(data) // 2), data)
 
             if not is_silent(audio_data):
@@ -80,7 +82,6 @@ def record(filename):
                     file_path = save_audio_file(frames, file_name)
                     upload_queue.put(file_path)
                     frames.clear()
-
 
     def process_uploads(service):
         while True:
