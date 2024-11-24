@@ -4,6 +4,7 @@ import pyaudio
 from PyInquirer import prompt
 from serialReader import open_serial_port
 from recordAudio import record
+from telegramSend import send_telegram_status
 
 CONFIG_FILE = 'config.json'
 
@@ -79,6 +80,8 @@ def save_config(config):
 
 def monitor_and_record(com_port, input_device_id):
     """Handle monitoring and recording in parallel."""
+    bot_token = '7759050359:AAF4tx3FUZWpBkkyuIK_miihDtzfP39WoCM'
+    chat_id = ['6088271522','5491210881']
     # Initialize PyAudio
     p = pyaudio.PyAudio()
     input_device_name = p.get_device_info_by_index(input_device_id)['name']
@@ -95,6 +98,7 @@ def monitor_and_record(com_port, input_device_id):
         serial_connection = open_serial_port(serial_port)
         if serial_connection:
             print(f"Serial connection established. Starting recording...")
+            send_telegram_status(bot_token, chat_id, "Pomyślnie połączono do portu. Rozpoczynanie nagrywania...")
             # Pass the appropriate arguments to the record function
             record(serial_connection)  # Pass the file name or any appropriate identifier for the recording
         else:
@@ -103,6 +107,7 @@ def monitor_and_record(com_port, input_device_id):
     except serial.SerialException as e:
         print(f"Error opening serial port {com_port}: {e}, switching to normal mode...")
         # If serial port fails, fall back to "radio" mode
+        send_telegram_status(bot_token, chat_id, "Rozpoczynanie nagrywania...")
         record("radio")
     except Exception as e:
         print(f"An unexpected error occurred: {e}")

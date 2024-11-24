@@ -75,3 +75,29 @@ def send_to_telegram(file_path, bot_token, chat_id):
         print(f"File deleted: {new_file_name}")
     except Exception as e:
         print(f"Error sending file to Telegram: {e}")
+        
+def send_telegram_status(bot_token, chat_id, message):
+    """Send a text message to a Telegram chat to indicate device status."""
+    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+    
+    # Construct the message to be sent
+    caption = f"*Status urządzenia:* {message}"
+    
+    # Escape special characters for MarkdownV2
+    caption_escaped = caption.replace('.', '\\.').replace('-', '\\-')
+    
+    try:
+        for chat_ids in chat_id:
+            data = {
+                'chat_id': chat_ids,
+                'text': caption_escaped,
+                'parse_mode': 'MarkdownV2'
+            }
+            response = requests.post(url, data=data)
+            
+            if response.status_code == 200:
+                print(f"Status message sent to chat ID {chat_ids} successfully.")
+            else:
+                print(f"Failed to send status message to chat ID {chat_ids}: {response.status_code} - {response.text}")
+    except Exception as e:
+        print(f"Error sending status message to Telegram: {e}")
