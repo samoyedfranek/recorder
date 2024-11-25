@@ -50,54 +50,61 @@ def send_to_telegram(file_path, bot_token, chat_id):
     # Escape special characters for MarkdownV2
     caption_escaped = caption.replace('.', '\\.').replace('-', '\\-')
 
+    for attempt in range(5):  # Retry mechanism for up to 5 attempts
+        try:
+            for chat_ids in chat_id:
+                with open(new_file_path, 'rb') as audio_file:
+                    files = {'audio': audio_file}
+                    data = {
+                        'chat_id': chat_ids,
+                        'caption': caption_escaped,
+                        'parse_mode': 'MarkdownV2'
+                    }
+                    response = requests.post(url, data=data, files=files)
+                
+                if response.status_code == 200:
+                    print(f"File sent to chat ID {chat_ids} successfully: {new_file_name}")
+                    break  # Exit the retry loop if successful
+                else:
+                    print(f"Failed to send file to chat ID {chat_ids}: {response.status_code} - {response.text}")
+            else:
+                # If the inner loop didn't break, continue retrying
+                time.sleep(2)  # Optional delay between retries
+                continue
+            break  # Break outer loop if successful
+        except Exception as e:
+            print(f"Attempt {attempt + 1}: Error sending file to Telegram: {e}")
+            time.sleep(2)  # Optional delay before retrying
+    else:
+        print("Failed to send the file after 5 attempts.")
+        return  # Exit if all attempts fail
+    
+    # Wait for 5 seconds before deleting the file
+    time.sleep(5)
+    
+    # Delete the file after sending it
+    os.remove(new_file_path)
+    print(f"File deleted: {new_file_name}")
 
-    try:
-        for chat_ids in chat_id:
-            with open(new_file_path, 'rb') as audio_file:
-                files = {'audio': audio_file}
-                data = {
-                    'chat_id': chat_ids,
-                    'caption': caption_escaped,
-                    'parse_mode': 'MarkdownV2'
-                }
-                response = requests.post(url, data=data, files=files)
-            
-            if response.status_code == 200:
-                print(f"File sent to chat ID {chat_ids} successfully: {new_file_name}")
-            else:
-                print(f"Failed to send file to chat ID {chat_ids}: {response.status_code} - {response.text}")
-        
-        # Wait for 5 seconds before deleting the file
-        time.sleep(5)
-        
-        # Delete the file after sending it
-        os.remove(new_file_path)
-        print(f"File deleted: {new_file_name}")
-    except Exception as e:
-        print(f"Error sending file to Telegram: {e}")
-        
 def send_telegram_status(bot_token, chat_id, message):
-    """Send a text message to a Telegram chat to indicate device status."""
+    """Send a status message to Telegram with retries."""
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-    
-    # Construct the message to be sent
-    caption = f"*Status urządzenia:* {message}"
-    
-    # Escape special characters for MarkdownV2
+    caption = f"*Status:* {message}"
     caption_escaped = caption.replace('.', '\\.').replace('-', '\\-')
-    
-    try:
-        for chat_ids in chat_id:
-            data = {
-                'chat_id': chat_ids,
-                'text': caption_escaped,
-                'parse_mode': 'MarkdownV2'
-            }
-            response = requests.post(url, data=data)
-            
-            if response.status_code == 200:
-                print(f"Status message sent to chat ID {chat_ids} successfully.")
-            else:
-                print(f"Failed to send status message to chat ID {chat_ids}: {response.status_code} - {response.text}")
-    except Exception as e:
-        print(f"Error sending status message to Telegram: {e}")
+
+    for attempt in range(5):
+        try:
+            for chat_ids in chat_id:
+                data = {'chat_id': chat_ids, 'text': caption_escaped, 'parse_mode': 'MarkdownV2'}
+                response = requests.post(url, data=data)
+
+                if response.status_code == 200:
+                    print(f"Status message sent to chat ID {chat_ids} successfully.")
+                else:
+                    print(f"Failed to send status message to chat ID {chat_ids}: {response.status_code} - {response.text}")
+            break
+        except Exception as e:
+            print(f"Attempt {attempt + 1} to send status message failed: {e}")
+            time.sleep(5)
+    else:
+        print(f"Failed to send status message after 5 attempts.")
