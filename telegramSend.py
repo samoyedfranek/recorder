@@ -50,53 +50,63 @@ def send_to_telegram(file_path, bot_token, chat_id):
     # Escape special characters for MarkdownV2
     caption_escaped = caption.replace('.', '\\.').replace('-', '\\-')
 
-
-    try:
-        for chat_ids in chat_id:
-            with open(new_file_path, 'rb') as audio_file:
-                files = {'audio': audio_file}
-                data = {
-                    'chat_id': chat_ids,
-                    'caption': caption_escaped,
-                    'parse_mode': 'MarkdownV2'
-                }
-                response = requests.post(url, data=data, files=files)
-            
-            if response.status_code == 200:
-                print(f"File sent to chat ID {chat_ids} successfully: {new_file_name}")
-            else:
-                print(f"Failed to send file to chat ID {chat_ids}: {response.status_code} - {response.text}")
-        
-        # Wait for 5 seconds before deleting the file
-        time.sleep(3)
-        
-        # Delete the file after sending it
-        os.remove(new_file_path)
-        print(f"File deleted: {new_file_name}")
-    except Exception as e:
-        print(f"Error sending file to Telegram: {e}")
-
-def monitor_directory(directory, bot_token, chat_id):
-    """Monitor a directory for new audio files and send them to Telegram."""
-    sent_files = set()
-
-    while True:
+    for attempt in range(5):  # Retry mechanism for up to 5 attempts
         try:
-            # List all files in the directory with '.wav' extension
-            files = {f for f in os.listdir(directory) if f.endswith('.wav')}
-            
-            # Find new files that haven't been sent yet
-            new_files = files - sent_files
-            
-            for file_name in new_files:
-                file_path = os.path.join(directory, file_name)
-                print(f"New file detected: {file_name}")
-                send_to_telegram(file_path, bot_token, chat_id)
-                sent_files.add(file_name)
-            
-            time.sleep(5)  # Check for new files every 5 seconds
-        except KeyboardInterrupt:
-            print("Stopped monitoring directory.")
+            failed_ids = []  # Track failed chat IDs
+
+            for chat_id in chat_ids:
+                with open(new_file_path, 'rb') as audio_file:
+                    files = {'audio': audio_file}
+                    data = {
+                        'chat_id': chat_id,
+                        'caption': caption_escaped,
+                        'parse_mode': 'MarkdownV2'
+                    }
+                    response = requests.post(url, data=data, files=files)
+
+                if response.status_code == 200:
+                    print(f"File sent to chat ID {chat_id} successfully: {new_file_name}")
+                else:
+                    print(f"Failed to send file to chat ID {chat_id}: {response.status_code} - {response.text}")
+                    failed_ids.append(chat_id)  # Track failed IDs for retry
+
+            if not failed_ids:
+                # If no failures, exit the retry loop
+                break
+
+            # Update the list of chat IDs for retry
+            chat_ids = failed_ids
+            print(f"Retrying for failed chat IDs: {chat_ids}")
+            time.sleep(2)  # Optional delay between retries
+        except Exception as e:
+            print(f"Attempt {attempt + 1}: Error sending file to Telegram: {e}")
+            time.sleep(2)  # Optional delay before retrying
+    else:
+        print(f"Failed to send the file to some chat IDs after 5 attempts: {chat_ids}")
+        return  # Exit if all attempts fail
+    # Wait for 5 seconds before deleting the file
+    time.sleep(5)
+    
+    # Delete the file after sending it
+    os.remove(new_file_path)
+    print(f"File deleted: {new_file_name}")
+
+def send_telegram_status(bot_token, chat_id, message):
+    """Send a status message to Telegram with retries."""
+    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+    caption = f"*Status:* {message}"
+    caption_escaped = caption.replace('.', '\\.').replace('-', '\\-')
+
+    for attempt in range(5):
+        try:
+            for chat_ids in chat_id:
+                data = {'chat_id': chat_ids, 'text': caption_escaped, 'parse_mode': 'MarkdownV2'}
+                response = requests.post(url, data=data)
+
+                if response.status_code == 200:
+                    print(f"Status message sent to chat ID {chat_ids} successfully.")
+                else:
+                    print(f"Failed to send status message to chat ID {chat_ids}: {response.status_code} - {response.text}")
             break
         except Exception as e:
             print(f"Error while monitoring directory: {e}")

@@ -7,7 +7,7 @@ from threading import Thread
 from datetime import datetime
 import pyaudio
 from googleDrive import authenticate_google_drive, upload_to_google_drive
-
+from telegramSend import send_to_telegram
 def record(filename):
     # Load configuration from JSON
     def load_config():
@@ -42,7 +42,9 @@ def record(filename):
     def is_silent(data):
         # Unpack the audio data into integers
         audio_data = wave.struct.unpack("%dh" % (len(data) // 2), data)
-        return max(abs(i) for i in audio_data) < SILENCE_THRESHOLD
+        max_amplitude = max(abs(i) for i in audio_data)
+        print(f"Max amplitude: {max_amplitude}")  # Debug: print the max amplitude
+        return max_amplitude < SILENCE_THRESHOLD
 
     def record_audio():
         p = pyaudio.PyAudio()
