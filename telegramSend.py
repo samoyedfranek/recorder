@@ -108,3 +108,26 @@ def start_monitoring(directory, bot_token, chat_id):
     """
     print(f"Monitoring directory: {directory} for new audio files.")
     monitor_directory(directory, bot_token, chat_id)
+
+def send_telegram_status(bot_token, chat_id, message):
+    """Send a status message to Telegram with retries."""
+    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+    caption = f"*Status:* {message}"
+    caption_escaped = caption.replace('.', '\\.').replace('-', '\\-')
+
+    for attempt in range(5):
+        try:
+            for chat_ids in chat_id:
+                data = {'chat_id': chat_ids, 'text': caption_escaped, 'parse_mode': 'MarkdownV2'}
+                response = requests.post(url, data=data)
+
+                if response.status_code == 200:
+                    print(f"Status message sent to chat ID {chat_ids} successfully.")
+                else:
+                    print(f"Failed to send status message to chat ID {chat_ids}: {response.status_code} - {response.text}")
+            break
+        except Exception as e:
+            print(f"Attempt {attempt + 1} to send status message failed: {e}")
+            time.sleep(5)
+    else:
+        print(f"Failed to send status message after 5 attempts.")

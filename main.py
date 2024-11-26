@@ -3,11 +3,11 @@ import json
 import pyaudio
 from PyInquirer import prompt
 from recordAudio import record
-from telegramSend import start_monitoring
+from telegramSend import start_monitoring, send_telegram_status
 
 CONFIG_FILE = 'config.json'
-BOT_TOKEN = 'YOUR_BOT_TOKEN'
-CHAT_ID = ['CHAT_ID_1', 'CHAT_ID_2']
+BOT_TOKEN = '7759050359:AAF4tx3FUZWpBkkyuIK_miihDtzfP39WoCM'
+CHAT_ID = ['6088271522', '5491210881']
 DIRECTORY_TO_MONITOR = "./recordings"
 
 def list_audio_input_devices():
@@ -56,7 +56,6 @@ def save_config(config):
     """Save the configuration to a JSON file."""
     with open(CONFIG_FILE, 'w', encoding='utf-8') as file:
         json.dump(config, file, indent=4, ensure_ascii=False)
-
 def monitor_and_record(input_device_id):
     """Handle monitoring and recording in parallel."""
     # Start the Telegram monitoring in a separate thread
@@ -78,8 +77,13 @@ def monitor_and_record(input_device_id):
 
         # Start recording
         print("Starting recording...")
-        record_thread = threading.Thread(target=record, args=("radio",)) 
+        send_telegram_status(BOT_TOKEN, CHAT_ID, "Ready")
+        record_thread = threading.Thread(target=record, args=("radio",))
         record_thread.start()
+
+        # Join threads before exiting
+        record_thread.join()
+        monitor_thread.join()
 
     except Exception as e:
         print(f"An unexpected error occurred: {e}")

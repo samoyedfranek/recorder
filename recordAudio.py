@@ -83,12 +83,16 @@ def record(filename):
                     frames.clear()
 
     def process_uploads(service):
-        while True:
-            file_path = upload_queue.get()
-            if file_path is None:
-                break
-            upload_to_google_drive(file_path, '1eEMhEHFETEi8uQec5OhrmWdF-RZfxUAy', service)
-            time.sleep(1)
+        try:
+            while True:
+                file_path = upload_queue.get()
+                if file_path is None:
+                    break
+                upload_to_google_drive(file_path, '1eEMhEHFETEi8uQec5OhrmWdF-RZfxUAy', service)
+                time.sleep(1)
+        except Exception as e:
+            print(f"Error in upload thread: {e}")
+
 
     drive_service = authenticate_google_drive()
 
