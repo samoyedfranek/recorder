@@ -42,7 +42,9 @@ def record(filename):
     def is_silent(data):
         # Unpack the audio data into integers
         audio_data = wave.struct.unpack("%dh" % (len(data) // 2), data)
-        return max(abs(i) for i in audio_data) < SILENCE_THRESHOLD
+        max_amplitude = max(abs(i) for i in audio_data)
+        print(f"Max amplitude: {max_amplitude}")  # Debug: print the max amplitude
+        return max_amplitude < SILENCE_THRESHOLD
 
     def record_audio():
         p = pyaudio.PyAudio()
