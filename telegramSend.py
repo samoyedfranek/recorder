@@ -52,33 +52,38 @@ def send_to_telegram(file_path, bot_token, chat_id):
 
     for attempt in range(5):  # Retry mechanism for up to 5 attempts
         try:
-            for chat_ids in chat_id:
+            failed_ids = []  # Track failed chat IDs
+
+            for chat_id in chat_ids:
                 with open(new_file_path, 'rb') as audio_file:
                     files = {'audio': audio_file}
                     data = {
-                        'chat_id': chat_ids,
+                        'chat_id': chat_id,
                         'caption': caption_escaped,
                         'parse_mode': 'MarkdownV2'
                     }
                     response = requests.post(url, data=data, files=files)
-                
+
                 if response.status_code == 200:
-                    print(f"File sent to chat ID {chat_ids} successfully: {new_file_name}")
-                    break  # Exit the retry loop if successful
+                    print(f"File sent to chat ID {chat_id} successfully: {new_file_name}")
                 else:
-                    print(f"Failed to send file to chat ID {chat_ids}: {response.status_code} - {response.text}")
-            else:
-                # If the inner loop didn't break, continue retrying
-                time.sleep(2)  # Optional delay between retries
-                continue
-            break  # Break outer loop if successful
+                    print(f"Failed to send file to chat ID {chat_id}: {response.status_code} - {response.text}")
+                    failed_ids.append(chat_id)  # Track failed IDs for retry
+
+            if not failed_ids:
+                # If no failures, exit the retry loop
+                break
+
+            # Update the list of chat IDs for retry
+            chat_ids = failed_ids
+            print(f"Retrying for failed chat IDs: {chat_ids}")
+            time.sleep(2)  # Optional delay between retries
         except Exception as e:
             print(f"Attempt {attempt + 1}: Error sending file to Telegram: {e}")
             time.sleep(2)  # Optional delay before retrying
     else:
-        print("Failed to send the file after 5 attempts.")
+        print(f"Failed to send the file to some chat IDs after 5 attempts: {chat_ids}")
         return  # Exit if all attempts fail
-    
     # Wait for 5 seconds before deleting the file
     time.sleep(5)
     
