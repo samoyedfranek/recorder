@@ -1,4 +1,5 @@
 import os
+import time
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
@@ -25,14 +26,21 @@ def authenticate_google_drive():
     return build('drive', 'v3', credentials=creds)
 
 def upload_to_google_drive(file_path, folder_id, service):
-    """Upload a file to Google Drive in a specific folder."""
-    file_metadata = {
-        'name': os.path.basename(file_path),
-        'parents': [folder_id],  # Specify the folder to save the file
-    }
+    """
+    Upload a file to Google Drive with retries.
+    Returns:
+        bool: True if upload was successful, False otherwise.
+    """
+    file_metadata = {'name': os.path.basename(file_path), 'parents': [folder_id]}
     media = MediaFileUpload(file_path, mimetype='audio/wav')
-    try:
-        service.files().create(body=file_metadata, media_body=media, fields='id').execute()
-        print(f"File '{file_path}' uploaded to Google Drive successfully.")
-    except Exception as e:
-        print(f"Failed to upload file: {e}")
+
+    for attempt in range(5):  # Retry up to 5 times
+        try:
+            service.files().create(body=file_metadata, media_body=media, fields='id').execute()
+            print(f"File '{file_path}' uploaded to Google Drive successfully.")
+            return True
+        except Exception as e:
+            print(f"Attempt {attempt + 1} to upload file failed: {e}")
+            time.sleep(5)
+    print(f"Failed to upload '{file_path}' to Google Drive after 5 attempts.")
+    return False

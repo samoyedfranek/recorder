@@ -5,10 +5,10 @@ import json
 from queue import Queue
 from threading import Thread
 from datetime import datetime
+from serialReader import open_serial_port
 import pyaudio
-from googleDrive import authenticate_google_drive, upload_to_google_drive
 
-def record(filename):
+def record():
     # Load configuration from JSON
     def load_config():
         with open('config.json', 'r') as f:
@@ -16,18 +16,18 @@ def record(filename):
 
     config = load_config()
     input_device_id = config["input_device"]
+    com_port = config["com_port"]
 
     CHUNK = 1024
     FORMAT = pyaudio.paInt16
     CHANNELS = 1
     RATE = 48000
-    SILENCE_THRESHOLD = 800
+    SILENCE_THRESHOLD = 200
     SILENCE_DURATION = 5
 
     LOCAL_STORAGE_PATH = "./recordings"
     os.makedirs(LOCAL_STORAGE_PATH, exist_ok=True)
 
-    upload_queue = Queue()
     audio_queue = Queue()
 
     def save_audio_file(frames, file_name):
@@ -42,7 +42,9 @@ def record(filename):
     def is_silent(data):
         # Unpack the audio data into integers
         audio_data = wave.struct.unpack("%dh" % (len(data) // 2), data)
-        return max(abs(i) for i in audio_data) < SILENCE_THRESHOLD
+        max_amplitude = max(abs(i) for i in audio_data)
+        # print(f"Max amplitude: {max_amplitude}")  # Debug: print the max amplitude
+        return max_amplitude < SILENCE_THRESHOLD
 
     def record_audio():
         p = pyaudio.PyAudio()
@@ -67,6 +69,7 @@ def record(filename):
             if not is_silent(data):
                 if not recording:
                     print("Sound detected, recording started...")
+                    filename = open_serial_port(com_port)
                 recording = True
                 silent_chunks = 0
                 frames.append(data)
@@ -78,28 +81,12 @@ def record(filename):
                     print("Silence detected, recording stopped.")
                     recording = False
                     file_name = f"{filename}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.wav"
-                    file_path = save_audio_file(frames, file_name)
-                    upload_queue.put(file_path)
+                    save_audio_file(frames, file_name)
                     frames.clear()
-
-    def process_uploads(service):
-        while True:
-            file_path = upload_queue.get()
-            if file_path is None:
-                break
-            upload_to_google_drive(file_path, '1eEMhEHFETEi8uQec5OhrmWdF-RZfxUAy', service)
-            time.sleep(1)
-
-    drive_service = authenticate_google_drive()
-
-    upload_thread = Thread(target=process_uploads, args=(drive_service,), daemon=True)
-    upload_thread.start()
 
     try:
         record_audio()
     except KeyboardInterrupt:
         print("Program terminated.")
-        upload_queue.put(None)
-        upload_thread.join()
     except Exception as e:
         print(f"Error: {e}")

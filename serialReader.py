@@ -1,9 +1,11 @@
-import serialReader
-import json
+import serial
 
-# Function to open the serial port and extract data
-def open_serial_port(serial_port):
+def open_serial_port(com_port):
     try:
+        # Attempt to open the serial port
+        serial_port = serial.Serial(com_port, 38400, timeout=0)
+        # print(f"Successfully opened serial port: {com_port}.")
+        
         while True:  # Keep reading from serial port until output is found
             if serial_port.in_waiting > 0:  # Check if there is data available to read
                 byte_data = serial_port.read(serial_port.in_waiting)  # Read all available bytes
@@ -13,7 +15,6 @@ def open_serial_port(serial_port):
 
                 # Convert filtered bytes to a string
                 printable_str = ''.join([chr(byte) for byte in printable_data])
-                # print(f"Received printable data: {printable_str}")
                 
                 # Define the start marker
                 start_marker = "II"
@@ -31,25 +32,9 @@ def open_serial_port(serial_port):
                     elif extracted_data.endswith("AM"):
                         extracted_data = extracted_data[:-2]  # Remove "AM"
                     
-                    # Return the first extracted result and exit
+                    # Return the extracted data
                     return extracted_data
 
     except Exception as e:
         print(f"Error opening serial port: {e}")
-        return None
-    
-    
-
-if __name__ == "__main__":
-    def load_config():
-        with open('config.json', 'r') as f:
-            return json.load(f)
-
-    config = load_config()
-    # Open the serial port (this would be done in the calling file)
-    COM_PORT = config["com_port"]  # Adjust if needed
-    serial_port = serialReader.Serial(COM_PORT, 38400, timeout=0)
-    
-    # Call the function with the serial port
-    extracted_data = open_serial_port(serial_port)
-    # print(f"Extracted data: {extracted_data}")
+        return "radio"  # Return "radio" if there is an error or no serial connection
