@@ -22,7 +22,7 @@ def record():
     FORMAT = pyaudio.paInt16
     CHANNELS = 1
     RATE = 48000
-    SILENCE_THRESHOLD = 500
+    SILENCE_THRESHOLD = 200
     SILENCE_DURATION = 5
 
     LOCAL_STORAGE_PATH = "./recordings"
@@ -43,7 +43,7 @@ def record():
         # Unpack the audio data into integers
         audio_data = wave.struct.unpack("%dh" % (len(data) // 2), data)
         max_amplitude = max(abs(i) for i in audio_data)
-        # print(f"Max amplitude: {max_amplitude}")  # Debug: print the max amplitude
+        print(f"Max amplitude: {max_amplitude}")  # Debug: print the max amplitude
         return max_amplitude < SILENCE_THRESHOLD
 
     def record_audio():
@@ -80,12 +80,8 @@ def record():
                 if silent_chunks >= (SILENCE_DURATION * RATE / CHUNK):
                     print("Silence detected, recording stopped.")
                     recording = False
-                    if frames:  # Check if there is data to save
-                        file_name = f"{filename}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.wav"
-                        save_audio_file(frames, file_name)
-                        print(f"Saved recording as {file_name}")
-                    else:
-                        print("No audio recorded. File will not be saved.")
+                    file_name = f"{filename}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.wav"
+                    save_audio_file(frames, file_name)
                     frames.clear()
 
     try:
