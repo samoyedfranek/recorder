@@ -22,7 +22,7 @@ def record():
     FORMAT = pyaudio.paInt16
     CHANNELS = 1
     RATE = 48000
-    SILENCE_THRESHOLD = 200  # Increased threshold for silence detection
+    SILENCE_THRESHOLD = 250  # Increased threshold for silence detection
     SILENCE_DURATION = 5  # Adjusted to a smaller duration to allow more audio before stopping
 
     LOCAL_STORAGE_PATH = "./recordings"
@@ -52,9 +52,6 @@ def record():
         p = pyaudio.PyAudio()
         input_stream = p.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True,
                             input_device_index=input_device_id, frames_per_buffer=CHUNK)
-        data = input_stream.read(CHUNK, exception_on_overflow=False)
-        is_silent(data)
-
         print("Listening for sound...")
         frames = []
         silent_chunks = 0
