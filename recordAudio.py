@@ -18,7 +18,7 @@ def record():
     input_device_id = config["input_device"]
     com_port = config["com_port"]
 
-    CHUNK = 2048
+    CHUNK = 1024
     FORMAT = pyaudio.paInt16
     CHANNELS = 1
     RATE = 48000
@@ -52,6 +52,9 @@ def record():
         p = pyaudio.PyAudio()
         input_stream = p.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True,
                             input_device_index=input_device_id, frames_per_buffer=CHUNK)
+        data = input_stream.read(CHUNK, exception_on_overflow=False)
+        is_silent(data)
+
         print("Listening for sound...")
         frames = []
         silent_chunks = 0
