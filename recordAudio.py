@@ -23,7 +23,8 @@ def record():
     CHANNELS = 1
     RATE = 48000
     SILENCE_THRESHOLD = 1000  # Increased threshold for silence detection
-    SILENCE_DURATION = 5  # Adjusted to a smaller duration to allow more audio before stopping
+    SILENCE_DURATION = 5  # Duration for detecting sustained silence
+    MINIMUM_VALID_AMPLITUDE = 5000  # Minimum valid amplitude to start recording
 
     LOCAL_STORAGE_PATH = "./recordings"
     os.makedirs(LOCAL_STORAGE_PATH, exist_ok=True)
@@ -57,6 +58,8 @@ def record():
         frames = []
         silent_chunks = 0
         recording = False
+        initial_amplitude = 0
+        amplitude_drop_threshold = 5000  # Threshold to detect a significant drop
 
         while True:
             try:
@@ -67,7 +70,9 @@ def record():
                 continue
 
             # Check if the audio is silent
-            if not is_silent(data):
+            max_amplitude = max(abs(i) for i in wave.struct.unpack("%dh" % (len(data) // 2), data))
+            
+            if max_amplitude >= MINIMUM_VALID_AMPLITUDE:
                 if not recording:
                     print("Sound detected, recording started...")
                     filename = open_serial_port(com_port)
@@ -75,6 +80,7 @@ def record():
                 silent_chunks = 0
                 frames.append(data)
                 audio_queue.put(data)
+                initial_amplitude = max_amplitude  # Record the initial high amplitude
             elif recording:
                 silent_chunks += 1
                 # If silence is detected for the set duration, stop recording
@@ -83,6 +89,11 @@ def record():
                     recording = False
                     file_name = f"{filename}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.wav"
                     save_audio_file(frames, file_name)
+                    frames.clear()
+                # If the amplitude drops significantly after the initial peak, discard the recording
+                if initial_amplitude - max_amplitude > amplitude_drop_threshold:
+                    print(f"Amplitude dropped significantly from {initial_amplitude} to {max_amplitude}, discarding recording.")
+                    recording = False
                     frames.clear()
 
     try:
