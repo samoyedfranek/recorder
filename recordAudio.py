@@ -24,6 +24,7 @@ def record():
     RATE = 48000
     SILENCE_THRESHOLD = 1000  # Increased threshold for silence detection
     SILENCE_DURATION = 5  # Adjusted to a smaller duration to allow more audio before stopping
+    MINIMUM_VALID_AMPLITUDE = 5000
 
     LOCAL_STORAGE_PATH = "./recordings"
     os.makedirs(LOCAL_STORAGE_PATH, exist_ok=True)
