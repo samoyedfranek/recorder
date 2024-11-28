@@ -22,8 +22,8 @@ def record():
     FORMAT = pyaudio.paInt16
     CHANNELS = 1
     RATE = 48000
-    SILENCE_THRESHOLD = 800
-    SILENCE_DURATION = 5
+    SILENCE_THRESHOLD = 1000  # Increased threshold for silence detection
+    SILENCE_DURATION = 5  # Adjusted to a smaller duration to allow more audio before stopping
 
     LOCAL_STORAGE_PATH = "./recordings"
     os.makedirs(LOCAL_STORAGE_PATH, exist_ok=True)
@@ -37,13 +37,14 @@ def record():
             wf.setsampwidth(pyaudio.PyAudio().get_sample_size(FORMAT))
             wf.setframerate(RATE)
             wf.writeframes(b''.join(frames))
+        print(f"Audio saved as {file_name}")
         return file_path
 
     def is_silent(data):
         # Unpack the audio data into integers
         audio_data = wave.struct.unpack("%dh" % (len(data) // 2), data)
         max_amplitude = max(abs(i) for i in audio_data)
-        # print(f"Max amplitude: {max_amplitude}")  # Debug: print the max amplitude
+        print(f"Max amplitude: {max_amplitude}")  # Debug: Print the max amplitude
         return max_amplitude < SILENCE_THRESHOLD
 
     def record_audio():
