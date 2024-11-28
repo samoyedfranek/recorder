@@ -70,7 +70,15 @@ def record():
                 continue
 
             # Calculate max amplitude
-            max_amplitude = max(abs(i) for i in wave.struct.unpack("%dh" % (len(data) // 2), data))
+            audio_data = wave.struct.unpack("%dh" % (len(data) // 2), data)
+            max_amplitude = max(abs(i) for i in audio_data)
+
+            print(f"Max amplitude: {max_amplitude}")  # Debug: Print the max amplitude
+
+            # Always enforce the threshold check
+            if max_amplitude < SILENCE_THRESHOLD:
+                print("Below threshold; no recording.")
+                continue
 
             if max_amplitude >= MINIMUM_VALID_AMPLITUDE:
                 if not recording:
