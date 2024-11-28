@@ -47,6 +47,7 @@ def monitor_directory(directory, drive_service, folder_id, bot_token, chat_ids):
             for file_name in new_files:
                 if file_name.endswith('.wav'):  # Process only WAV files
                     file_path = os.path.join(directory, file_name)
+                    time.sleep(5)
                     prioritize_google_drive_and_telegram(file_path, drive_service, folder_id, bot_token, chat_ids)
 
             processed_files = current_files
