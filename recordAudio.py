@@ -22,7 +22,7 @@ def record():
     FORMAT = pyaudio.paInt16
     CHANNELS = 1
     RATE = 48000
-    SILENCE_THRESHOLD = 150  # Increased threshold for silence detection
+    SILENCE_THRESHOLD = 200  # Increased threshold for silence detection
     SILENCE_DURATION = 5  # Adjusted to a smaller duration to allow more audio before stopping
 
     LOCAL_STORAGE_PATH = "./recordings"
