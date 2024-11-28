@@ -28,31 +28,29 @@ def record():
     LOCAL_STORAGE_PATH = "./recordings"
     os.makedirs(LOCAL_STORAGE_PATH, exist_ok=True)
 
-    audio_queue = Queue()
+    def is_silent(data):
+        audio_data = wave.struct.unpack("%dh" % (len(data) // 2), data)
+        max_amplitude = max(abs(i) for i in audio_data)
+        print(f"Max amplitude: {max_amplitude}")
+        return max_amplitude < SILENCE_THRESHOLD
 
     def save_audio_file(frames, file_name):
+        if not frames:
+            print("No audio data to save. Skipping file.")
+            return
         file_path = os.path.join(LOCAL_STORAGE_PATH, file_name)
         with wave.open(file_path, 'wb') as wf:
             wf.setnchannels(CHANNELS)
             wf.setsampwidth(pyaudio.PyAudio().get_sample_size(FORMAT))
             wf.setframerate(RATE)
             wf.writeframes(b''.join(frames))
-        print(f"Audio saved as {file_name}")
-        return file_path
-
-    def is_silent(data):
-        # Unpack the audio data into integers
-        audio_data = wave.struct.unpack("%dh" % (len(data) // 2), data)
-        max_amplitude = max(abs(i) for i in audio_data)
-        # print(f"Max amplitude: {max_amplitude}")  # Debug: Print the max amplitude
-        return max_amplitude < SILENCE_THRESHOLD
+        actual_duration = len(frames) * CHUNK / RATE
+        print(f"Audio saved as {file_name}, Duration: {actual_duration:.2f} seconds")
 
     def record_audio():
         p = pyaudio.PyAudio()
-
-        # Open the input stream for recording
-        input_stream = p.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, input_device_index=input_device_id, frames_per_buffer=CHUNK)
-
+        input_stream = p.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, 
+                            input_device_index=input_device_id, frames_per_buffer=CHUNK)
         print("Listening for sound...")
         frames = []
         silent_chunks = 0
@@ -60,31 +58,30 @@ def record():
 
         while True:
             try:
-                # Read audio data from the input stream
                 data = input_stream.read(CHUNK, exception_on_overflow=False)
+                if not is_silent(data):
+                    if not recording:
+                        print("Sound detected, recording started...")
+                        filename = open_serial_port(com_port)
+                    recording = True
+                    silent_chunks = 0
+                    frames.append(data)
+                elif recording:
+                    silent_chunks += 1
+                    if silent_chunks >= (SILENCE_DURATION * RATE / CHUNK):
+                        print("Silence detected, recording stopped.")
+                        recording = False
+                        file_name = f"{filename}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.wav"
+                        save_audio_file(frames, file_name)
+                        frames.clear()
             except IOError as e:
                 print(f"Error reading audio data: {e}")
                 continue
-
-            # Check if the audio is silent
-            if not is_silent(data):
-                if not recording:
-                    print("Sound detected, recording started...")
-                    filename = open_serial_port(com_port)
-                recording = True
-                silent_chunks = 0
-                frames.append(data)
-                audio_queue.put(data)
-            elif recording:
-                silent_chunks += 1
-                # If silence is detected for the set duration, stop recording
-                if silent_chunks >= (SILENCE_DURATION * RATE / CHUNK):
-                    print("Silence detected, recording stopped.")
-                    recording = False
-                    file_name = f"{filename}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.wav"
-                    save_audio_file(frames, file_name)
-                    frames.clear()
-
+            except KeyboardInterrupt:
+                print("Program terminated.")
+                break
+            except Exception as e:
+                print(f"Error: {e}")
     try:
         record_audio()
     except KeyboardInterrupt:
