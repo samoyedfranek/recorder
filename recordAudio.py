@@ -22,7 +22,7 @@ def record():
     FORMAT = pyaudio.paInt16
     CHANNELS = 1
     RATE = 48000
-    SILENCE_THRESHOLD = 250  # Increased threshold for silence detection
+    SILENCE_THRESHOLD = 300  # Increased threshold for silence detection
     SILENCE_DURATION = 5  # Adjusted to a smaller duration to allow more audio before stopping
 
     LOCAL_STORAGE_PATH = "./recordings"
@@ -31,7 +31,7 @@ def record():
     def is_silent(data):
         audio_data = wave.struct.unpack("%dh" % (len(data) // 2), data)
         max_amplitude = max(abs(i) for i in audio_data)
-        print(f"Max amplitude: {max_amplitude}")
+        # print(f"Max amplitude: {max_amplitude}")
         return max_amplitude < SILENCE_THRESHOLD
 
     def save_audio_file(frames, file_name):
@@ -44,9 +44,6 @@ def record():
             wf.setsampwidth(pyaudio.PyAudio().get_sample_size(FORMAT))
             wf.setframerate(RATE)
             wf.writeframes(b''.join(frames))
-        total_frames = len(frames)
-        expected_duration = total_frames * CHUNK / RATE
-        print(f"Audio saved as {file_name}, Duration: {expected_duration:.2f} seconds, Total Frames: {total_frames}")
 
     def record_audio():
         p = pyaudio.PyAudio()
@@ -67,7 +64,6 @@ def record():
                     recording = True
                     silent_chunks = 0
                     frames.append(data)
-                    print(f"Accumulated {len(frames)} frames")
                 elif recording:
                     silent_chunks += 1
                     if silent_chunks >= (SILENCE_DURATION * RATE / CHUNK):
