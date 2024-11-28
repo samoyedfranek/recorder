@@ -80,8 +80,12 @@ def record():
                 if silent_chunks >= (SILENCE_DURATION * RATE / CHUNK):
                     print("Silence detected, recording stopped.")
                     recording = False
-                    file_name = f"{filename}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.wav"
-                    save_audio_file(frames, file_name)
+                    if frames:  # Check if there is data to save
+                        file_name = f"{filename}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.wav"
+                        save_audio_file(frames, file_name)
+                        print(f"Saved recording as {file_name}")
+                    else:
+                        print("No audio recorded. File will not be saved.")
                     frames.clear()
 
     try:
