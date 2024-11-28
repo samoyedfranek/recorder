@@ -44,12 +44,13 @@ def record():
             wf.setsampwidth(pyaudio.PyAudio().get_sample_size(FORMAT))
             wf.setframerate(RATE)
             wf.writeframes(b''.join(frames))
-        actual_duration = len(frames) * CHUNK / RATE
-        print(f"Audio saved as {file_name}, Duration: {actual_duration:.2f} seconds")
+        total_frames = len(frames)
+        expected_duration = total_frames * CHUNK / RATE
+        print(f"Audio saved as {file_name}, Duration: {expected_duration:.2f} seconds, Total Frames: {total_frames}")
 
     def record_audio():
         p = pyaudio.PyAudio()
-        input_stream = p.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, 
+        input_stream = p.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True,
                             input_device_index=input_device_id, frames_per_buffer=CHUNK)
         print("Listening for sound...")
         frames = []
@@ -66,6 +67,7 @@ def record():
                     recording = True
                     silent_chunks = 0
                     frames.append(data)
+                    print(f"Accumulated {len(frames)} frames")
                 elif recording:
                     silent_chunks += 1
                     if silent_chunks >= (SILENCE_DURATION * RATE / CHUNK):
@@ -82,6 +84,8 @@ def record():
                 break
             except Exception as e:
                 print(f"Error: {e}")
+
+
     try:
         record_audio()
     except KeyboardInterrupt:
