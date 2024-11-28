@@ -31,7 +31,7 @@ def record():
     def is_silent(data):
         audio_data = wave.struct.unpack("%dh" % (len(data) // 2), data)
         max_amplitude = max(abs(i) for i in audio_data)
-        print(f"Max amplitude: {max_amplitude}")
+        # print(f"Max amplitude: {max_amplitude}")
         return max_amplitude < SILENCE_THRESHOLD
 
     def save_audio_file(frames, file_name):
