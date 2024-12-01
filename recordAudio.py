@@ -44,7 +44,6 @@ def record():
             wf.setsampwidth(pyaudio.PyAudio().get_sample_size(FORMAT))
             wf.setframerate(RATE)
             wf.writeframes(b''.join(frames))
-
     def record_audio():
         p = pyaudio.PyAudio()
         input_stream = p.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True,
@@ -61,26 +60,31 @@ def record():
                     if not recording:
                         print("Sound detected, recording started...")
                         filename = open_serial_port(com_port)
+                        if not filename:
+                            print("Error: Invalid filename from serial port.")
+                            continue
                     recording = True
                     silent_chunks = 0
                     frames.append(data)
                 elif recording:
                     silent_chunks += 1
                     if silent_chunks >= (SILENCE_DURATION * RATE / CHUNK):
-                        print("Silence detected, recording stopped.")
+                        print("Silence detected, stopping recording.")
                         recording = False
-                        file_name = f"{filename}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.wav"
-                        save_audio_file(frames, file_name)
+                        if frames:
+                            file_name = f"{filename}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.wav"
+                            save_audio_file(frames, file_name)
                         frames.clear()
             except IOError as e:
                 print(f"Error reading audio data: {e}")
+                input_stream = p.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True,
+                                    input_device_index=input_device_id, frames_per_buffer=CHUNK)
                 continue
             except KeyboardInterrupt:
                 print("Program terminated.")
                 break
             except Exception as e:
-                print(f"Error: {e}")
-
+                print(f"Unexpected error: {e}")
 
     try:
         record_audio()
