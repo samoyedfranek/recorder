@@ -71,6 +71,7 @@ def record():
                         recording = False
                         file_name = f"{filename}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.wav"
                         save_audio_file(frames, file_name)
+                        time.sleep(2)
                         frames.clear()
             except IOError as e:
                 print(f"Error reading audio data: {e}")
