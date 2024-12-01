@@ -73,12 +73,9 @@ def record():
                     if silent_chunks >= (SILENCE_DURATION * RATE / CHUNK):
                         print("Silence detected, stopping recording.")
                         recording = False
-                        if len(frames) >= (MIN_RECORDING_LENGTH * RATE / CHUNK):
-                            file_name = f"{filename}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.wav"
-                            save_audio_file(frames, file_name)
-                            print(f"Saved file: {file_name}")
-                        else:
-                            print("Recording too short, skipping save.")
+                        file_name = f"{filename}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.wav"
+                        save_audio_file(frames, file_name)
+                        print(f"Saved file: {file_name}")
                         frames.clear()
             except IOError as e:
                 print(f"PyAudio error: {e}")
