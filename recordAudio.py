@@ -18,7 +18,7 @@ def record():
     input_device_id = config["input_device"]
     com_port = config["com_port"]
 
-    CHUNK = 1024
+    CHUNK = 16384
     FORMAT = pyaudio.paInt16
     CHANNELS = 1
     RATE = 48000
