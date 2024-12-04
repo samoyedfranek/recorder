@@ -2,8 +2,6 @@ import os
 import time
 import wave
 import json
-from queue import Queue
-from threading import Thread
 from datetime import datetime
 from serialReader import open_serial_port
 import pyaudio
@@ -18,11 +16,11 @@ def record():
     input_device_id = config["input_device"]
     com_port = config["com_port"]
 
-    CHUNK = 16384
+    CHUNK = 8192
     FORMAT = pyaudio.paInt16
     CHANNELS = 1
     RATE = 48000
-    SILENCE_THRESHOLD = 300  # Increased threshold for silence detection
+    SILENCE_THRESHOLD = 275  # Increased threshold for silence detection
     SILENCE_DURATION = 5  # Adjusted to a smaller duration to allow more audio before stopping
 
     LOCAL_STORAGE_PATH = "./recordings"
@@ -65,14 +63,12 @@ def record():
                     silent_chunks = 0
                     frames.append(data)
                 elif recording:
-                    silent_chunks += 1
-                    frames.append(data)    
+                    silent_chunks += 1  
                     if silent_chunks >= (SILENCE_DURATION * RATE / CHUNK):
                         print("Silence detected, recording stopped.")
                         recording = False
                         file_name = f"{filename}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.wav"
                         save_audio_file(frames, file_name)
-                        time.sleep(2)
                         frames.clear()
             except IOError as e:
                 print(f"Error reading audio data: {e}")
