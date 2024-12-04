@@ -63,7 +63,7 @@ def record():
                     silent_chunks = 0
                     frames.append(data)
                 elif recording:
-                    silent_chunks += 1  
+                    silent_chunks += 1
                     if silent_chunks >= (SILENCE_DURATION * RATE / CHUNK):
                         print("Silence detected, recording stopped.")
                         recording = False
