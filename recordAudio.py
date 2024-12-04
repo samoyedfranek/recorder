@@ -21,7 +21,7 @@ def record():
     CHANNELS = 1
     RATE = 48000
     SILENCE_THRESHOLD = 275  # Increased threshold for silence detection
-    SILENCE_DURATION = 5  # Adjusted to a smaller duration to allow more audio before stopping
+    SILENCE_DURATION = 3  # Adjusted to a smaller duration to allow more audio before stopping
 
     LOCAL_STORAGE_PATH = "./recordings"
     os.makedirs(LOCAL_STORAGE_PATH, exist_ok=True)
