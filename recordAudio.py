@@ -5,6 +5,7 @@ import json
 from datetime import datetime
 from serialReader import open_serial_port
 import pyaudio
+import numpy as np
 
 def record():
     # Load configuration from JSON
@@ -27,11 +28,11 @@ def record():
     os.makedirs(LOCAL_STORAGE_PATH, exist_ok=True)
 
     def is_silent(data):
-        audio_data = wave.struct.unpack("%dh" % (len(data) // 2), data)
-        max_amplitude = max(abs(i) for i in audio_data)
+        audio_data = np.frombuffer(data, dtype=np.int16)
+        max_amplitude = np.max(np.abs(audio_data))
         # print(f"Max amplitude: {max_amplitude}")
         return max_amplitude < SILENCE_THRESHOLD
-
+        
     def save_audio_file(frames, file_name):
         if not frames:
             print("No audio data to save. Skipping file.")
