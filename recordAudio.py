@@ -1,5 +1,4 @@
 import os
-import time
 import wave
 import json
 from datetime import datetime
@@ -51,6 +50,7 @@ def record():
         print("Listening for sound...")
         frames = []
         silent_chunks = 0
+        non_silent_chunks = 0  # Tracks the number of non-silent chunks
         recording = False
 
         while True:
@@ -62,16 +62,27 @@ def record():
                         filename = open_serial_port(com_port)
                     recording = True
                     silent_chunks = 0
+                    non_silent_chunks += 1  # Increment for non-silent chunks
                     frames.append(data)
+                    total_non_silent_duration = non_silent_chunks * CHUNK / RATE
                 elif recording:
                     silent_chunks += 1
                     frames.append(data)
                     if silent_chunks >= (SILENCE_DURATION * RATE / CHUNK):
                         print("Silence detected, recording stopped.")
                         recording = False
-                        file_name = f"{filename}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.wav"
-                        save_audio_file(frames, file_name)
+
+                        total_non_silent_duration = non_silent_chunks * CHUNK / RATE
+                        if total_non_silent_duration >= 1:
+                            file_name = f"{filename}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.wav"
+                            save_audio_file(frames, file_name)
+                        else:
+                            print(f"Recording too short ({total_non_silent_duration:.2f} sec). Skipping file.")
+
                         frames.clear()
+                        non_silent_chunks = 0  # Reset non-silent chunk counter
+                else:
+                    frames.clear()  # Discard silent data when not recording
             except IOError as e:
                 print(f"Error reading audio data: {e}")
                 continue
@@ -80,7 +91,6 @@ def record():
                 break
             except Exception as e:
                 print(f"Error: {e}")
-
 
     try:
         record_audio()
