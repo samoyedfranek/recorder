@@ -85,6 +85,10 @@ def monitor_and_record(input_device_id, drive_service, folder_id):
 def main():
     # Authenticate Google Drive
     drive_service = authenticate_google_drive()
+    if drive_service:
+        print("Google Drive authenticated successfully.")
+    else:
+        print("Google Drive authentication failed. Continuing with limited functionality.")
 
     # Prompt user for configuration (COM port and audio input device)
     config = load_config()
