@@ -24,19 +24,20 @@ def record():
     SILENCE_DURATION = 3  # Adjusted to a smaller duration to allow more audio before stopping
 
     LOCAL_STORAGE_PATH = "./recordings"
+    CACHE_DIR = './cache'  # Path for short recordings
     os.makedirs(LOCAL_STORAGE_PATH, exist_ok=True)
+    os.makedirs(CACHE_DIR, exist_ok=True)  # Create cache directory if not exists
 
     def is_silent(data):
         audio_data = np.frombuffer(data, dtype=np.int16)
         max_amplitude = np.max(np.abs(audio_data))
-        # print(f"Max amplitude: {max_amplitude}")
         return max_amplitude < SILENCE_THRESHOLD
         
-    def save_audio_file(frames, file_name):
+    def save_audio_file(frames, file_name, is_short=False):
         if not frames:
             print("No audio data to save. Skipping file.")
             return
-        file_path = os.path.join(LOCAL_STORAGE_PATH, file_name)
+        file_path = file_name if not is_short else os.path.join(CACHE_DIR, file_name)  # Save to cache if short
         with wave.open(file_path, 'wb') as wf:
             wf.setnchannels(CHANNELS)
             wf.setsampwidth(pyaudio.PyAudio().get_sample_size(FORMAT))
@@ -77,7 +78,9 @@ def record():
                             file_name = f"{filename}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.wav"
                             save_audio_file(frames, file_name)
                         else:
-                            print(f"Recording too short ({total_non_silent_duration:.2f} sec). Skipping file.")
+                            print(f"Recording too short ({total_non_silent_duration:.2f} sec). Saving to /cache.")
+                            short_file_name = f"{filename}_{datetime.now().strftime('%Y%m%d_%H%M%S')}_short.wav"
+                            save_audio_file(frames, short_file_name, is_short=True)
 
                         frames.clear()
                         non_silent_chunks = 0  # Reset non-silent chunk counter
