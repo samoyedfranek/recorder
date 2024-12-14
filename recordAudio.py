@@ -37,12 +37,18 @@ def record():
         if not frames:
             print("No audio data to save. Skipping file.")
             return
-        file_path = file_name if not is_short else os.path.join(CACHE_DIR, file_name)  # Save to cache if short
+        # Decide where to save the file based on whether it's short or normal
+        if is_short:
+            file_path = os.path.join(CACHE_DIR, file_name)  # Save to cache if short
+        else:
+            file_path = os.path.join(LOCAL_STORAGE_PATH, file_name)  # Save to normal storage if not short
+
         with wave.open(file_path, 'wb') as wf:
             wf.setnchannels(CHANNELS)
             wf.setsampwidth(pyaudio.PyAudio().get_sample_size(FORMAT))
             wf.setframerate(RATE)
             wf.writeframes(b''.join(frames))
+        print(f"File saved: {file_path}")
 
     def record_audio():
         p = pyaudio.PyAudio()
@@ -75,9 +81,11 @@ def record():
 
                         total_non_silent_duration = non_silent_chunks * CHUNK / RATE
                         if total_non_silent_duration >= 1:
+                            # Normal recording
                             file_name = f"{filename}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.wav"
-                            save_audio_file(frames, file_name)
+                            save_audio_file(frames, file_name, is_short=False)
                         else:
+                            # Short recording saved to /cache
                             print(f"Recording too short ({total_non_silent_duration:.2f} sec). Saving to /cache.")
                             short_file_name = f"{filename}_{datetime.now().strftime('%Y%m%d_%H%M%S')}_short.wav"
                             save_audio_file(frames, short_file_name, is_short=True)
