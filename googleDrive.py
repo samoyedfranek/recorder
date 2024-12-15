@@ -24,7 +24,7 @@ def authenticate_google_drive():
             except Exception as e:
                 print(f"Error refreshing token: {e}. Proceeding with limited functionality.")
                 flow = InstalledAppFlow.from_client_secrets_file('credentials.json', SCOPES)
-                auth_url, _ = flow.authorization_url(prompt='consent')
+                auth_url, _ = flow.authorization_url(prompt='consent', access_type=None)
                 print(f"To reauthorize, visit this URL: {auth_url}")
                 return None  # Allow the program to continue running
         
