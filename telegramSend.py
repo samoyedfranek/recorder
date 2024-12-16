@@ -36,9 +36,9 @@ def send_to_telegram(file_path, bot_token, chat_ids):
     caption_escaped = caption.replace('.', '\\.').replace('-', '\\-')
 
     success = True
-    for attempt in range(5):
+    for attempt in range(5):  # Retry mechanism
+        failed_ids = []
         try:
-            failed_ids = []
             for chat_id in chat_ids:
                 with open(new_file_path, 'rb') as audio_file:
                     files = {'audio': audio_file}
@@ -55,21 +55,24 @@ def send_to_telegram(file_path, bot_token, chat_ids):
                     print(f"Failed to send file to chat ID {chat_id}: {response.status_code} - {response.text}")
                     failed_ids.append(chat_id)
 
-            if not failed_ids:
+            if not failed_ids:  # All succeeded
                 break
             chat_ids = failed_ids
+            print(f"Retrying failed chat IDs: {failed_ids}")
             time.sleep(2)
         except Exception as e:
             print(f"Attempt {attempt + 1}: Error sending file to Telegram: {e}")
             time.sleep(2)
-        else:
             success = False
 
-    if success:
+    if not failed_ids:  # Only delete if all succeeded
         os.remove(new_file_path)
         print(f"File deleted: {new_file_name}")
+        success = True
     else:
-        print(f"Failed to send the file to some chat IDs after 5 attempts: {chat_ids}")
+        print(f"Failed to send the file to some chat IDs after 5 attempts: {failed_ids}")
+        success = False
+
     return success
 
 def send_telegram_status(bot_token, chat_id, message):
