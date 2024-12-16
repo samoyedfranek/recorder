@@ -17,7 +17,6 @@ def prioritize_google_drive_and_telegram(file_path, service, folder_id, bot_toke
     try:
         print(f"Uploading {file_path} to Google Drive...")
         upload_to_google_drive(file_path, folder_id, service)
-        print(f"Uploaded {file_path} to Google Drive successfully.")
         google_drive_success = True
     except Exception as e:
         print(f"Failed to upload {file_path} to Google Drive: {e}")

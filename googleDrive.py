@@ -16,18 +16,17 @@ def authenticate_google_drive():
     if os.path.exists('token.json'):
         creds = Credentials.from_authorized_user_file('token.json', SCOPES)
     
+    # Check if credentials are valid or can be refreshed
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            for attempt in range(5):
-                try:
-                    creds.refresh(Request())
-                    break  # Exit the loop if successful
-                except Exception as e:
-                    print(f"Attempt {attempt + 1}: Error refreshing token: {e}")
-                    if attempt == 4:  # If final attempt fails
-                        print("Proceeding with limited functionality.")
-                        return None
-                    time.sleep(2 ** attempt)
+            try:
+                creds.refresh(Request())
+            except Exception as e:
+                print(f"Error refreshing token: {e}. Proceeding with limited functionality.")
+                flow = InstalledAppFlow.from_client_secrets_file('credentials.json', SCOPES)
+                auth_url, _ = flow.authorization_url(prompt='consent', access_type=None)
+                print(f"To reauthorize, visit this URL: {auth_url}")
+                return None  # Allow the program to continue running
         
         if not creds:
             print("No valid credentials available. Starting new authentication flow.")
@@ -38,10 +37,12 @@ def authenticate_google_drive():
                 print(f"Authentication flow failed: {e}")
                 return None
             
+        # Save the credentials for future use
         with open('token.json', 'w') as token:
             token.write(creds.to_json())
     
     return build('drive', 'v3', credentials=creds) if creds else None
+
 
 def upload_to_google_drive(file_path, folder_id, service):
     """
