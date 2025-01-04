@@ -17,7 +17,7 @@ def record():
     com_port = config["com_port"]
 
     CHUNK = 16384
-    FORMAT = pyaudio.paInt24
+    FORMAT = pyaudio.paInt16
     CHANNELS = 1
     RATE = 48000
     SILENCE_THRESHOLD = 275  # Increased threshold for silence detection
