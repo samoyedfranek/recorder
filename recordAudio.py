@@ -5,6 +5,7 @@ from datetime import datetime
 from serialReader import open_serial_port
 import pyaudio
 import numpy as np
+import noisereduce as nr
 
 
 def trim_audio(frames, trim_seconds, rate, chunk_size):
@@ -25,9 +26,9 @@ def record():
     FORMAT = pyaudio.paInt16
     CHANNELS = 1
     RATE = 48000
-    SILENCE_THRESHOLD = 110  # Nagrywanie zaczyna się, gdy RMS < 110
-    SILENCE_DURATION = 5
-    TRIM_SECONDS = 5
+    SILENCE_THRESHOLD = 100  # Adjust if needed
+    SILENCE_DURATION = 5  # Seconds
+    TRIM_SECONDS = 5  # Seconds
 
     LOCAL_STORAGE_PATH = "./recordings"
     os.makedirs(LOCAL_STORAGE_PATH, exist_ok=True)
@@ -38,15 +39,31 @@ def record():
             return
 
         frames = trim_audio(frames, TRIM_SECONDS, RATE, CHUNK)
-        file_path = os.path.join(LOCAL_STORAGE_PATH, file_name)
 
-        with wave.open(file_path, "wb") as wf:
+        # Convert frames to NumPy array
+        audio_data = np.frombuffer(b"".join(frames), dtype=np.int16)
+
+        # Save original audio
+        original_file_path = os.path.join(LOCAL_STORAGE_PATH, f"{file_name}_original.wav")
+        with wave.open(original_file_path, "wb") as wf:
             wf.setnchannels(CHANNELS)
             wf.setsampwidth(pyaudio.PyAudio().get_sample_size(FORMAT))
             wf.setframerate(RATE)
-            wf.writeframes(b"".join(frames))
+            wf.writeframes(audio_data.tobytes())
+        print(f"Original file saved: {original_file_path}")
 
-        print(f"File saved: {file_path}")
+        # Apply noise reduction
+        noise_profile = audio_data[: RATE // 2]  # First 0.5 seconds as noise profile
+        denoised_audio = nr.reduce_noise(y=audio_data, y_noise=noise_profile, sr=RATE)
+
+        # Save denoised audio
+        denoised_file_path = os.path.join(LOCAL_STORAGE_PATH, f"{file_name}_denoised.wav")
+        with wave.open(denoised_file_path, "wb") as wf:
+            wf.setnchannels(CHANNELS)
+            wf.setsampwidth(pyaudio.PyAudio().get_sample_size(FORMAT))
+            wf.setframerate(RATE)
+            wf.writeframes(denoised_audio.astype(np.int16).tobytes())
+        print(f"Denoised file saved: {denoised_file_path}")
 
     def record_audio():
         p = pyaudio.PyAudio()
@@ -58,7 +75,7 @@ def record():
             input_device_index=input_device_id,
             frames_per_buffer=CHUNK,
         )
-        print("Listening for sound...")
+        print("Listening for sound")
         frames = []
         silent_chunks = 0
         recording = False
@@ -74,28 +91,29 @@ def record():
                     print(f"Buffer overflow or device issue: {e}")
                     continue
 
-                # Konwersja danych audio do numpy array
+                # Convert audio data to numpy array
                 audio_data = np.frombuffer(data, dtype=np.int16)
                 if audio_data.size == 0:
                     print("Warning: Empty audio buffer received.")
                     continue
 
-                # Obliczanie RMS i maksymalnej amplitudy
+                # Calculate RMS (Root Mean Square) amplitude
                 rms_amplitude = np.sqrt(np.mean(audio_data**2)) if np.any(audio_data) else 0
-                if np.isnan(rms_amplitude):
-                    rms_amplitude = 0  # Zamiana NaN na 0
-
                 max_amplitude = np.max(np.abs(audio_data)) if np.any(audio_data) else 0
 
-                # Debugowanie wartości RMS
+                # Ensure no NaN values
+                rms_amplitude = 0 if np.isnan(rms_amplitude) else rms_amplitude
+
+                # ** Logging the audio properties **
                 # print(
-                #     f"RMS Amplitude: {rms_amplitude}, Max Amplitude: {max_amplitude}, "
+                #     f"RMS Amplitude: {rms_amplitude:.2f}, Max Amplitude: {max_amplitude}, "
                 #     f"Threshold: {SILENCE_THRESHOLD}, Silent chunks: {silent_chunks}, Recording: {recording}"
                 # )
 
-                if rms_amplitude < SILENCE_THRESHOLD:  # Nagrywanie startuje, gdy RMS < 110
+                # Start recording when RMS is below threshold
+                if rms_amplitude < SILENCE_THRESHOLD:
                     if not recording:
-                        print("Silence detected, recording started...")
+                        print("Sound detected, recording started...")
                         filename = open_serial_port(com_port)
                     recording = True
                     silent_chunks = 0
@@ -104,9 +122,9 @@ def record():
                     silent_chunks += 1
                     frames.append(data)
                     if silent_chunks >= (SILENCE_DURATION * RATE / CHUNK):
-                        print("Sound detected, recording stopped.")
+                        print("Silence detected, recording stopped.")
                         recording = False
-                        file_name = f"{filename}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.wav"
+                        file_name = f"{filename}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
                         save_audio_file(frames, file_name)
                         frames.clear()
                 else:

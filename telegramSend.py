@@ -1,9 +1,36 @@
 import os
 import time
 import requests
-from datetime import datetime
 import re
+from datetime import datetime
 
+def get_caption_label(file_name):
+    """
+    Determine the label for the caption based on the filename.
+    Returns:
+        str: The label ("WYCISZONE", "ORYGINAŁ", or an empty string).
+    """
+    if "_denoised" in file_name:
+        return "WYCISZONE"
+    elif "_original" in file_name:
+        return "ORYGINAŁ"
+    return ""
+
+def extract_datetime(file_name):
+    """
+    Extracts date and time from filename (format: YYYYMMDD_HHMMSS).
+    Returns:
+        tuple: Formatted date and time strings or ('Unknown Date', 'Unknown Time').
+    """
+    date_time_pattern = r"(\d{8})_(\d{6})"
+    match = re.search(date_time_pattern, file_name)
+
+    if match:
+        date_str, time_str = match.groups()
+        formatted_date = datetime.strptime(date_str, "%Y%m%d").strftime("%Y-%m-%d")
+        formatted_time = datetime.strptime(time_str, "%H%M%S").strftime("%H:%M:%S")
+        return formatted_date, formatted_time
+    return "Unknown Date", "Unknown Time"
 
 def send_to_telegram(file_path, bot_token, chat_ids):
     """
@@ -13,28 +40,18 @@ def send_to_telegram(file_path, bot_token, chat_ids):
     """
     url = f"https://api.telegram.org/bot{bot_token}/sendAudio"
     file_name = os.path.basename(file_path)
-
-    # Extract file name details
-    # Take the part before the first underscore
     file_name_cleaned = file_name.split("_", 1)[0]
-    date_time_pattern = r"(\d{8})_(\d{6})"  # Regex to match date and time
-    match = re.search(date_time_pattern, file_name)
+    formatted_date, formatted_time = extract_datetime(file_name)
+    label = get_caption_label(file_name)
 
-    if match:
-        date_str = match.group(1)
-        time_str = match.group(2)
-        formatted_date = datetime.strptime(date_str, "%Y%m%d").strftime("%Y-%m-%d")
-        formatted_time = datetime.strptime(time_str, "%H%M%S").strftime("%H:%M:%S")
-    else:
-        formatted_date = "Unknown Date"
-        formatted_time = "Unknown Time"
-
-    new_file_name = f"{file_name_cleaned}.wav" if file_name.endswith(".wav") else f"{file_name_cleaned}.wav"
+    new_file_name = f"{file_name_cleaned}.wav"
     new_file_path = os.path.join(os.path.dirname(file_path), new_file_name)
     if file_path != new_file_path:
         os.rename(file_path, new_file_path)
 
     caption = f"*{formatted_date} {formatted_time}* - COŚ SIĘ DZIEJE"
+    if label:
+        caption += f"\n\n*{label}*"
     caption_escaped = caption.replace(".", "\\.").replace("-", "\\-")
 
     success = True
@@ -76,7 +93,6 @@ def send_to_telegram(file_path, bot_token, chat_ids):
         success = False
 
     return success
-
 
 def send_telegram_status(bot_token, chat_id, message):
     """Send a status message to Telegram with retries."""
