@@ -5,7 +5,6 @@ from datetime import datetime
 from serialReader import open_serial_port
 import pyaudio
 import numpy as np
-import noisereduce as nr
 
 
 def trim_audio(frames, trim_seconds, rate, chunk_size):
@@ -22,11 +21,11 @@ def record():
     input_device_id = config["input_device"]
     com_port = config["com_port"]
 
-    CHUNK = 8192
+    CHUNK = 2048  # Updated chunk size
     FORMAT = pyaudio.paInt16
     CHANNELS = 1
     RATE = 48000
-    SILENCE_THRESHOLD = 100  # Adjust if needed
+    AMPLITUDE_THRESHOLD = 200  # Use amplitude instead of RMS
     SILENCE_DURATION = 5  # Seconds
     TRIM_SECONDS = 5  # Seconds
 
@@ -44,26 +43,13 @@ def record():
         audio_data = np.frombuffer(b"".join(frames), dtype=np.int16)
 
         # Save original audio
-        original_file_path = os.path.join(LOCAL_STORAGE_PATH, f"{file_name}_original.wav")
-        with wave.open(original_file_path, "wb") as wf:
+        file_path = os.path.join(LOCAL_STORAGE_PATH, f"{file_name}.wav")
+        with wave.open(file_path, "wb") as wf:
             wf.setnchannels(CHANNELS)
             wf.setsampwidth(pyaudio.PyAudio().get_sample_size(FORMAT))
             wf.setframerate(RATE)
             wf.writeframes(audio_data.tobytes())
-        print(f"Original file saved: {original_file_path}")
-
-        # Apply noise reduction
-        noise_profile = audio_data[: RATE // 2]  # First 0.5 seconds as noise profile
-        denoised_audio = nr.reduce_noise(y=audio_data, y_noise=noise_profile, sr=RATE)
-
-        # Save denoised audio
-        denoised_file_path = os.path.join(LOCAL_STORAGE_PATH, f"{file_name}_denoised.wav")
-        with wave.open(denoised_file_path, "wb") as wf:
-            wf.setnchannels(CHANNELS)
-            wf.setsampwidth(pyaudio.PyAudio().get_sample_size(FORMAT))
-            wf.setframerate(RATE)
-            wf.writeframes(denoised_audio.astype(np.int16).tobytes())
-        print(f"Denoised file saved: {denoised_file_path}")
+        print(f"File saved: {file_path}")
 
     def record_audio():
         p = pyaudio.PyAudio()
