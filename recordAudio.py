@@ -52,7 +52,7 @@ def save_audio_file(frames, file_name, rate, channels, format_, debug):
         wf.writeframes(audio_data.tobytes())
 
     if debug:
-        print(f"File saved: {file_path} (Trimmed 5s from end)")
+        print(f"File saved: {file_path} (Trimmed 4s from end)")
 
 
 def record():
@@ -102,12 +102,12 @@ def record():
                 )
 
             if max_amplitude > AMPLITUDE_THRESHOLD:
+                silent_chunks = 0
                 if not recording:
                     if debug:
                         print("Sound detected, recording started...")
                     filename = open_serial_port(com_port)
                     frames.clear()
-                    silent_chunks = 0
                 recording = True
                 frames.append(data)
             elif recording:
