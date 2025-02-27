@@ -7,128 +7,128 @@ import pyaudio
 import numpy as np
 
 
-def trim_audio(frames, trim_seconds, rate, chunk_size):
-    trim_frames = trim_seconds * rate // chunk_size
-    return frames[:-trim_frames] if len(frames) > trim_frames else []
+def trim_audio(frames, trim_seconds, rate):
+    trim_samples = trim_seconds * rate * 2
+    total_bytes = sum(len(f) for f in frames)
+
+    if total_bytes <= trim_samples:
+        return []
+
+    keep_bytes = total_bytes - trim_samples
+    new_frames, kept = [], 0
+
+    for frame in frames:
+        if kept + len(frame) <= keep_bytes:
+            new_frames.append(frame)
+            kept += len(frame)
+        else:
+            new_frames.append(frame[: keep_bytes - kept])
+            break
+
+    return new_frames
+
+
+def load_config():
+    with open("config.json", "r") as f:
+        return json.load(f)
+
+
+def save_audio_file(frames, file_name, rate, channels, format_, debug):
+    if not frames:
+        if debug:
+            print("No audio data to save. Skipping file.")
+        return
+
+    frames = trim_audio(frames, trim_seconds=5, rate=rate)
+    audio_data = np.frombuffer(b"".join(frames), dtype=np.int16)
+
+    file_path = f"./recordings/{file_name}.wav"
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+
+    with wave.open(file_path, "wb") as wf:
+        wf.setnchannels(channels)
+        wf.setsampwidth(pyaudio.PyAudio().get_sample_size(format_))
+        wf.setframerate(rate)
+        wf.writeframes(audio_data.tobytes())
+
+    if debug:
+        print(f"File saved: {file_path} (Trimmed 5s from end)")
 
 
 def record():
-    def load_config():
-        with open("config.json", "r") as f:
-            return json.load(f)
-
     config = load_config()
     input_device_id = config["input_device"]
     com_port = config["com_port"]
+    debug = config.get("debug", False)
 
-    CHUNK = 2048  # Updated chunk size
+    CHUNK = 1024
     FORMAT = pyaudio.paInt16
     CHANNELS = 1
     RATE = 48000
-    AMPLITUDE_THRESHOLD = 200  # Use amplitude instead of RMS
-    SILENCE_DURATION = 5  # Seconds
-    TRIM_SECONDS = 5  # Seconds
+    AMPLITUDE_THRESHOLD = 200
+    SILENCE_DURATION = 5
+    SILENCE_CHUNKS = int(SILENCE_DURATION * RATE / CHUNK)
 
-    LOCAL_STORAGE_PATH = "./recordings"
-    os.makedirs(LOCAL_STORAGE_PATH, exist_ok=True)
+    p = pyaudio.PyAudio()
+    input_stream = p.open(
+        format=FORMAT,
+        channels=CHANNELS,
+        rate=RATE,
+        input=True,
+        input_device_index=input_device_id,
+        frames_per_buffer=CHUNK,
+    )
 
-    def save_audio_file(frames, file_name):
-        if not frames:
-            print("No audio data to save. Skipping file.")
-            return
-
-        frames = trim_audio(frames, TRIM_SECONDS, RATE, CHUNK)
-
-        # Convert frames to NumPy array
-        audio_data = np.frombuffer(b"".join(frames), dtype=np.int16)
-
-        # Save original audio
-        file_path = os.path.join(LOCAL_STORAGE_PATH, f"{file_name}.wav")
-        with wave.open(file_path, "wb") as wf:
-            wf.setnchannels(CHANNELS)
-            wf.setsampwidth(pyaudio.PyAudio().get_sample_size(FORMAT))
-            wf.setframerate(RATE)
-            wf.writeframes(audio_data.tobytes())
-        print(f"File saved: {file_path}")
-
-    def record_audio():
-        p = pyaudio.PyAudio()
-        input_stream = p.open(
-            format=FORMAT,
-            channels=CHANNELS,
-            rate=RATE,
-            input=True,
-            input_device_index=input_device_id,
-            frames_per_buffer=CHUNK,
-        )
-        print("Listening for sound")
-        frames = []
-        silent_chunks = 0
-        recording = False
-
-        try:
-            while True:
-                try:
-                    data = input_stream.read(CHUNK, exception_on_overflow=False)
-                    if not data:
-                        print("Warning: Received empty audio data.")
-                        continue
-                except IOError as e:
-                    print(f"Buffer overflow or device issue: {e}")
-                    continue
-
-                # Convert audio data to numpy array
-                audio_data = np.frombuffer(data, dtype=np.int16)
-                if audio_data.size == 0:
-                    print("Warning: Empty audio buffer received.")
-                    continue
-
-                # Calculate RMS (Root Mean Square) amplitude
-                rms_amplitude = np.sqrt(np.mean(audio_data**2)) if np.any(audio_data) else 0
-                max_amplitude = np.max(np.abs(audio_data)) if np.any(audio_data) else 0
-
-                # Ensure no NaN values
-                rms_amplitude = 0 if np.isnan(rms_amplitude) else rms_amplitude
-
-                # ** Logging the audio properties **
-                print(
-                      f"RMS Amplitude: {rms_amplitude:.2f}, Max Amplitude: {max_amplitude}, "
-                     f"Threshold: {SILENCE_THRESHOLD}, Silent chunks: {silent_chunks}, Recording: {recording}"
-                )
-
-                # Start recording when RMS is below threshold
-                if rms_amplitude < SILENCE_THRESHOLD:
-                    if not recording:
-                        print("Sound detected, recording started...")
-                        filename = open_serial_port(com_port)
-                    recording = True
-                    silent_chunks = 0
-                    frames.append(data)
-                elif recording:
-                    silent_chunks += 1
-                    frames.append(data)
-                    if silent_chunks >= (SILENCE_DURATION * RATE / CHUNK):
-                        print("Silence detected, recording stopped.")
-                        recording = False
-                        file_name = f"{filename}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-                        save_audio_file(frames, file_name)
-                        frames.clear()
-                else:
-                    frames.clear()
-
-        except KeyboardInterrupt:
-            print("Program terminated.")
-        except Exception as e:
-            print(f"Unexpected error: {e}")
-        finally:
-            input_stream.stop_stream()
-            input_stream.close()
-            p.terminate()
-            print("Audio stream closed.")
+    if debug:
+        print("Listening for sound...")
+    frames, silent_chunks, recording = [], 0, False
+    filename = None
 
     try:
-        record_audio()
+        while True:
+            try:
+                data = input_stream.read(CHUNK, exception_on_overflow=False)
+                audio_data = np.frombuffer(data, dtype=np.int16)
+                max_amplitude = np.max(np.abs(audio_data)) if audio_data.size > 0 else 0
+            except IOError as e:
+                if debug:
+                    print(f"Buffer overflow or device issue: {e}")
+                continue
+
+            if debug:
+                print(
+                    f"Max Amplitude: {max_amplitude}, Threshold: {AMPLITUDE_THRESHOLD}, "
+                    f"Silent Chunks: {silent_chunks}/{SILENCE_CHUNKS}, Recording: {recording}"
+                )
+
+            if max_amplitude > AMPLITUDE_THRESHOLD:
+                if not recording:
+                    if debug:
+                        print("Sound detected, recording started...")
+                    filename = open_serial_port(com_port)
+                    frames.clear()
+                    silent_chunks = 0
+                recording = True
+                frames.append(data)
+            elif recording:
+                silent_chunks += 1
+                frames.append(data)
+                if silent_chunks >= SILENCE_CHUNKS:
+                    if debug:
+                        print("Silence detected, recording stopped.")
+                    save_audio_file(frames, f"{filename}_{datetime.now().strftime('%Y%m%d_%H%M%S')}", RATE, CHANNELS, FORMAT, debug)
+                    frames.clear()
+                    recording = False
+
     except KeyboardInterrupt:
-        print("Program terminated.")
+        if debug:
+            print("Program terminated.")
     except Exception as e:
-        print(f"Error: {e}")
+        if debug:
+            print(f"Unexpected error: {e}")
+    finally:
+        input_stream.stop_stream()
+        input_stream.close()
+        p.terminate()
+        if debug:
+            print("Audio stream closed.")
