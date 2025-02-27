@@ -105,10 +105,10 @@ def record():
                 rms_amplitude = 0 if np.isnan(rms_amplitude) else rms_amplitude
 
                 # ** Logging the audio properties **
-                # print(
-                #     f"RMS Amplitude: {rms_amplitude:.2f}, Max Amplitude: {max_amplitude}, "
-                #     f"Threshold: {SILENCE_THRESHOLD}, Silent chunks: {silent_chunks}, Recording: {recording}"
-                # )
+                print(
+                      f"RMS Amplitude: {rms_amplitude:.2f}, Max Amplitude: {max_amplitude}, "
+                     f"Threshold: {SILENCE_THRESHOLD}, Silent chunks: {silent_chunks}, Recording: {recording}"
+                )
 
                 # Start recording when RMS is below threshold
                 if rms_amplitude < SILENCE_THRESHOLD:
