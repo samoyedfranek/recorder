@@ -39,7 +39,7 @@ def save_audio_file(frames, file_name, rate, channels, format_, debug):
             print("No audio data to save. Skipping file.")
         return
 
-    frames = trim_audio(frames, trim_seconds=5, rate=rate)
+    frames = trim_audio(frames, trim_seconds=4, rate=rate)
     audio_data = np.frombuffer(b"".join(frames), dtype=np.int16)
 
     file_path = f"./recordings/{file_name}.wav"
