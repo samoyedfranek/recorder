@@ -102,12 +102,14 @@ def recorder(input_device_id, com_port, debug):
         print("Recording stopped.")
 
     finally:
-        # Check if the stream is active before stopping it
-        if stream_active and stream.is_active():
-            print("Stopping the stream.")
-            stream.stop_stream()
-            stream.close()
-            stream_active = False
+        # Safely handle stream closing
+        if stream_active:
+            try:
+                stream.stop_stream()
+                stream.close()
+                print("Stream stopped successfully.")
+            except Exception as e:
+                print(f"Error stopping the stream: {e}")
 
         if wf is not None:
             wf.close()
