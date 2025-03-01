@@ -52,7 +52,7 @@ def save_audio_file(frames, file_name, rate, channels, format_, debug):
 
 
 def audio_recorder(input_device_id, com_port, debug):
-    CHUNK = 2048  # Buffer size, adjust if necessary
+    CHUNK = 8192  # Buffer size, adjust if necessary
     FORMAT = pyaudio.paInt16
     CHANNELS = 1
     RATE = 48000 # Adjusted to a more common rate
