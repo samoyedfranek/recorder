@@ -1,6 +1,7 @@
 import os
 import time
 import json
+import threading
 from multiprocessing import Process
 from telegramSend import send_to_telegram, send_telegram_status
 from recordAudio import audio_recorder
@@ -22,12 +23,12 @@ def prioritize_telegram(file_path, bot_token, chat_ids):
         print(f"Failed to send {file_path} to Telegram.")
 
 
-def monitor_directory(directory, bot_token, chat_ids):
-    """Monitor a directory for new files and process them."""
+def monitor_directory(directory, bot_token, chat_ids, stop_event):
+    """Monitor a directory for new files and process them efficiently."""
     processed_files = set()
     print(f"Monitoring directory: {directory} for new audio files.")
 
-    while True:
+    while not stop_event.is_set():
         try:
             current_files = set(os.listdir(directory))
             new_files = current_files - processed_files
@@ -35,17 +36,18 @@ def monitor_directory(directory, bot_token, chat_ids):
             for file_name in new_files:
                 if file_name.endswith(".wav"):  # Process only WAV files
                     file_path = os.path.join(directory, file_name)
-                    time.sleep(5)  # Ensure file writing is complete
+                    time.sleep(2)  # Allow time for file writing
                     prioritize_telegram(file_path, bot_token, chat_ids)
 
             processed_files = current_files
         except Exception as e:
             print(f"Error while monitoring directory: {e}")
-        time.sleep(2)
+
+        time.sleep(5)  # Reduce CPU usage by checking every 5 seconds
 
 
 def monitor_and_record(input_device_id, com_port, debug):
-    """Handle monitoring and recording in parallel using multiprocessing."""
+    """Handle monitoring and recording in parallel using a process and a thread."""
     print(f"Using input device ID: {input_device_id}")
 
     try:
@@ -54,16 +56,21 @@ def monitor_and_record(input_device_id, com_port, debug):
 
         # Start recording process
         print("Starting recording...")
-        record_process = Process(target=audio_recorder, args=(input_device_id, com_port, debug))
+        record_process = Process(target=audio_recorder, args=(input_device_id, com_port, debug), daemon=True)
         record_process.start()
 
-        # Start directory monitoring as a separate process
-        monitor_process = Process(target=monitor_directory, args=(DIRECTORY_TO_MONITOR, BOT_TOKEN, CHAT_ID))
-        monitor_process.start()
+        # Use threading for file monitoring to reduce CPU usage
+        stop_event = threading.Event()
+        monitor_thread = threading.Thread(target=monitor_directory, args=(DIRECTORY_TO_MONITOR, BOT_TOKEN, CHAT_ID, stop_event), daemon=True)
+        monitor_thread.start()
 
-        # Wait for processes to complete (this will keep the script running)
-        record_process.join()
-        monitor_process.join()
+        # Keep script running without blocking
+        while record_process.is_alive():
+            time.sleep(1)
+
+        # Stop the monitoring thread when recording stops
+        stop_event.set()
+        monitor_thread.join()
 
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
@@ -84,7 +91,7 @@ def main():
     com_port = config["com_port"]
     debug = config.get("debug", False)
 
-    # Start monitoring and recording using multiprocessing
+    # Start monitoring and recording
     monitor_and_record(input_device_id, com_port, debug)
 
 

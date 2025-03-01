@@ -1,6 +1,7 @@
 import os
 import wave
 import json
+import time
 from datetime import datetime
 from serialReader import open_serial_port
 import pyaudio
@@ -81,7 +82,7 @@ def audio_recorder(input_device_id, com_port, debug):
     filename = None
 
     try:
-        while True:
+        while input_stream.is_active():
             try:
                 data = input_stream.read(CHUNK, exception_on_overflow=False)
                 audio_data = np.frombuffer(data, dtype=np.int16)
@@ -116,6 +117,8 @@ def audio_recorder(input_device_id, com_port, debug):
                     frames.clear()
                     recording = False
 
+            time.sleep(0.1)  # Reduce CPU usage
+
     except KeyboardInterrupt:
         if debug:
             print("Program terminated.")
@@ -140,7 +143,7 @@ def start():
         print("Starting recording process...")
 
     # Start recorder as a separate process
-    recorder_process = Process(target=audio_recorder, args=(input_device_id, com_port, debug))
+    recorder_process = Process(target=audio_recorder, args=(input_device_id, com_port, debug), daemon=True)
     recorder_process.start()
     recorder_process.join()  # Ensure the process completes before exiting
 
