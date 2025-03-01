@@ -61,7 +61,7 @@ def record():
     com_port = config["com_port"]
     debug = config.get("debug", False)
 
-    CHUNK = 2048
+    CHUNK = 4096
     FORMAT = pyaudio.paInt16
     CHANNELS = 1
     RATE = 22050
