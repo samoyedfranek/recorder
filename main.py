@@ -2,7 +2,6 @@ import os
 import time
 import json
 import threading
-from multiprocessing import Process
 from telegramSend import send_to_telegram, send_telegram_status
 from recordAudio import recorder
 from cli import load_config, prompt_user_for_config, list_com_ports
@@ -47,17 +46,17 @@ def monitor_directory(directory, bot_token, chat_ids, stop_event):
 
 
 def monitor_and_record(input_device_id, com_port, debug):
-    """Handle monitoring and recording in parallel using a process and a thread."""
+    """Handle monitoring and recording in parallel using threading."""
     print(f"Using input device ID: {input_device_id}")
 
     try:
         # Send status message
         send_telegram_status(BOT_TOKEN, CHAT_ID, "*Urządzenie gotowe do nagrywania.*")
 
-        # Start recording process
+        # Start recording in a thread
         print("Starting recording...")
-        record_process = Process(target=recorder, args=(input_device_id, com_port, debug), daemon=True)
-        record_process.start()
+        record_thread = threading.Thread(target=recorder, args=(input_device_id, com_port, debug), daemon=True)
+        record_thread.start()
 
         # Use threading for file monitoring to reduce CPU usage
         stop_event = threading.Event()
@@ -65,15 +64,15 @@ def monitor_and_record(input_device_id, com_port, debug):
         monitor_thread.start()
 
         # Keep script running without blocking
-        while record_process.is_alive():
+        while record_thread.is_alive():
             time.sleep(1)
 
         # Stop the monitoring thread when recording stops
         stop_event.set()
         monitor_thread.join()
 
-        # Ensure the recording process terminates cleanly
-        record_process.join()
+        # Ensure the recording thread terminates cleanly
+        record_thread.join()
 
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
