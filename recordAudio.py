@@ -46,6 +46,8 @@ def recorder(input_device_id, com_port, debug):
 
     serial_name = open_serial_port(com_port)
 
+    stream_active = True  # Track stream status
+
     try:
         while True:
             indata = np.frombuffer(stream.read(CHUNK_SIZE), dtype=np.int16)
@@ -100,9 +102,12 @@ def recorder(input_device_id, com_port, debug):
         print("Recording stopped.")
 
     finally:
-        if stream.is_active():
+        # Check if the stream is active before stopping it
+        if stream_active and stream.is_active():
+            print("Stopping the stream.")
             stream.stop_stream()
             stream.close()
+            stream_active = False
 
         if wf is not None:
             wf.close()
