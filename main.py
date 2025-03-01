@@ -2,7 +2,7 @@ import os
 import time
 import threading
 import json
-from multiprocessing import Process, Queue
+from multiprocessing import Process
 from telegramSend import send_to_telegram, send_telegram_status
 from recordAudio import audio_recorder
 from cli import load_config, prompt_user_for_config, list_com_ports
@@ -12,6 +12,7 @@ BOT_TOKEN = "7759050359:AAF4tx3FUZWpBkkyuIK_miihDtzfP39WoCM"
 CHAT_ID = ["6088271522", "5491210881"]
 DIRECTORY_TO_MONITOR = "./recordings"
 
+
 def prioritize_telegram(file_path, bot_token, chat_ids):
     """Send the file to Telegram."""
     print(f"Sending {file_path} to Telegram...")
@@ -20,6 +21,7 @@ def prioritize_telegram(file_path, bot_token, chat_ids):
         print(f"File {file_path} sent to Telegram successfully.")
     else:
         print(f"Failed to send {file_path} to Telegram.")
+
 
 def monitor_directory(directory, bot_token, chat_ids):
     """Monitor a directory for new files and process them."""
@@ -42,6 +44,7 @@ def monitor_directory(directory, bot_token, chat_ids):
             print(f"Error while monitoring directory: {e}")
         time.sleep(2)
 
+
 def monitor_and_record(input_device_id, com_port, debug):
     """Handle monitoring and recording in parallel."""
     print(f"Using input device ID: {input_device_id}")
@@ -51,17 +54,11 @@ def monitor_and_record(input_device_id, com_port, debug):
         print("Starting recording...")
         send_telegram_status(BOT_TOKEN, CHAT_ID, "*Urządzenie gotowe do nagrywania.*")
 
-        queue = Queue()
-
-        record_process = Process(target=audio_recorder, args=(queue, input_device_id, com_port, debug))
+        record_process = Process(target=audio_recorder, args=(input_device_id, com_port, debug))
         record_process.start()
 
         # Start monitoring directory in a separate thread
-        monitor_thread = threading.Thread(
-            target=monitor_directory, 
-            args=(DIRECTORY_TO_MONITOR, BOT_TOKEN, CHAT_ID), 
-            daemon=True
-        )
+        monitor_thread = threading.Thread(target=monitor_directory, args=(DIRECTORY_TO_MONITOR, BOT_TOKEN, CHAT_ID), daemon=True)
         monitor_thread.start()
 
         # Keep main process running
@@ -70,6 +67,7 @@ def monitor_and_record(input_device_id, com_port, debug):
 
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
+
 
 def main():
     """Main function to start the program."""
@@ -88,6 +86,7 @@ def main():
 
     # Start the monitoring and recording process
     monitor_and_record(input_device_id, com_port, debug)
+
 
 if __name__ == "__main__":
     main()

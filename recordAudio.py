@@ -5,28 +5,7 @@ from datetime import datetime
 from serialReader import open_serial_port
 import pyaudio
 import numpy as np
-from multiprocessing import Process, Queue
-
-
-def trim_audio(frames, trim_seconds, rate):
-    trim_samples = trim_seconds * rate * 2
-    total_bytes = sum(len(f) for f in frames)
-
-    if total_bytes <= trim_samples:
-        return []
-
-    keep_bytes = total_bytes - trim_samples
-    new_frames, kept = [], 0
-
-    for frame in frames:
-        if kept + len(frame) <= keep_bytes:
-            new_frames.append(frame)
-            kept += len(frame)
-        else:
-            new_frames.append(frame[: keep_bytes - kept])
-            break
-
-    return new_frames
+from multiprocessing import Process
 
 
 def load_config():
@@ -40,9 +19,6 @@ def save_audio_file(frames, file_name, rate, channels, format_, debug):
             print("No audio data to save. Skipping file.")
         return
 
-    frames = trim_audio(frames, trim_seconds=5, rate=rate)
-    audio_data = np.frombuffer(b"".join(frames), dtype=np.int16)
-
     file_path = f"./recordings/{file_name}.wav"
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
 
@@ -50,13 +26,13 @@ def save_audio_file(frames, file_name, rate, channels, format_, debug):
         wf.setnchannels(channels)
         wf.setsampwidth(pyaudio.PyAudio().get_sample_size(format_))
         wf.setframerate(rate)
-        wf.writeframes(audio_data.tobytes())
+        wf.writeframes(b"".join(frames))
 
     if debug:
-        print(f"File saved: {file_path} (Trimmed 4s from end)")
+        print(f"File saved: {file_path}")
 
 
-def audio_recorder(queue, input_device_id, com_port, debug):
+def audio_recorder(input_device_id, com_port, debug):
     CHUNK = 1024
     FORMAT = pyaudio.paInt16
     CHANNELS = 1
@@ -112,7 +88,7 @@ def audio_recorder(queue, input_device_id, com_port, debug):
                 if silent_chunks >= SILENCE_CHUNKS:
                     if debug:
                         print("Silence detected, recording stopped.")
-                    queue.put((frames, f"{filename}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"))
+                    save_audio_file(frames, f"{filename}_{datetime.now().strftime('%Y%m%d_%H%M%S')}", RATE, CHANNELS, FORMAT, debug)
                     frames.clear()
                     recording = False
 
@@ -130,34 +106,23 @@ def audio_recorder(queue, input_device_id, com_port, debug):
             print("Audio stream closed.")
 
 
-def audio_processor(queue, rate, channels, format_, debug):
-    while True:
-        frames, filename = queue.get()  # Blocking call
-        if frames is None:
-            break  # Exit signal received
-        save_audio_file(frames, filename, rate, channels, format_, debug)
-
-
 def start():
     config = load_config()
     input_device_id = config["input_device"]
     com_port = config["com_port"]
     debug = config.get("debug", False)
 
-    queue = Queue()  # Inter-process communication queue
+    if debug:
+        print("Starting recording process...")
 
-    recorder_process = Process(target=audio_recorder, args=(queue, input_device_id, com_port, debug))
-    processor_process = Process(target=audio_processor, args=(queue, 48000, 1, pyaudio.paInt16, debug))
-
+    # Start recorder as a separate process
+    recorder_process = Process(target=audio_recorder, args=(input_device_id, com_port, debug))
     recorder_process.start()
-    processor_process.start()
+    recorder_process.join()  # Ensure the process completes before exiting
 
-    try:
-        recorder_process.join()
-    except KeyboardInterrupt:
-        queue.put((None, None))  # Signal processor to exit
-        processor_process.join()
+    if debug:
+        print("Recording process ended.")
 
 
 if __name__ == "__main__":
-    start
+    start()
