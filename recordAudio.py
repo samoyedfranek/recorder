@@ -6,11 +6,10 @@ from datetime import datetime
 from serialReader import open_serial_port
 import pyaudio
 import numpy as np
-from multiprocessing import Process
 
 
 def trim_audio(frames, trim_seconds, rate):
-    trim_samples = trim_seconds * rate * 2
+    trim_samples = trim_seconds * rate * 2  # 2 bytes per sample (16-bit audio)
     total_bytes = sum(len(f) for f in frames)
 
     if total_bytes <= trim_samples:
@@ -28,11 +27,6 @@ def trim_audio(frames, trim_seconds, rate):
             break
 
     return new_frames
-
-
-def load_config():
-    with open("config.json", "r") as f:
-        return json.load(f)
 
 
 def save_audio_file(frames, file_name, rate, channels, format_, debug):
@@ -58,12 +52,12 @@ def save_audio_file(frames, file_name, rate, channels, format_, debug):
 
 
 def audio_recorder(input_device_id, com_port, debug):
-    CHUNK = 1024
+    CHUNK = 2048  # Buffer size, adjust if necessary
     FORMAT = pyaudio.paInt16
     CHANNELS = 1
-    RATE = 48000
-    AMPLITUDE_THRESHOLD = 200
-    SILENCE_DURATION = 5
+    RATE = 44100  # Adjusted to a more common rate
+    AMPLITUDE_THRESHOLD = 200  # Lower threshold for detecting quieter sounds
+    SILENCE_DURATION = 5  # Adjust to how long silence should be before stopping
     SILENCE_CHUNKS = int(SILENCE_DURATION * RATE / CHUNK)
 
     p = pyaudio.PyAudio()
@@ -78,13 +72,14 @@ def audio_recorder(input_device_id, com_port, debug):
 
     if debug:
         print("Listening for sound...")
+    
     frames, silent_chunks, recording = [], 0, False
     filename = None
 
     try:
         while True:
             if not input_stream.is_active():
-                time.sleep(0.01)
+                time.sleep(0.01)  # Reduce CPU usage while waiting for data
                 continue
 
             try:
@@ -103,7 +98,7 @@ def audio_recorder(input_device_id, com_port, debug):
                 )
 
             if max_amplitude > AMPLITUDE_THRESHOLD:
-                silent_chunks = 0
+                silent_chunks = 0  # Reset silent chunks when sound is detected
                 if not recording:
                     if debug:
                         print("Sound detected, recording started...")
@@ -120,6 +115,9 @@ def audio_recorder(input_device_id, com_port, debug):
                     save_audio_file(frames, f"{filename}_{datetime.now().strftime('%Y%m%d_%H%M%S')}", RATE, CHANNELS, FORMAT, debug)
                     frames.clear()
                     recording = False
+                    silent_chunks = 0  # Reset silent chunks after stopping recording
+
+            time.sleep(0.05)  # Reduced delay to prevent 100% CPU usage
 
     except KeyboardInterrupt:
         if debug:
@@ -133,25 +131,3 @@ def audio_recorder(input_device_id, com_port, debug):
         p.terminate()
         if debug:
             print("Audio stream closed.")
-
-
-def start():
-    """Start the audio recording process."""
-    config = load_config()
-    input_device_id = config["input_device"]
-    com_port = config["com_port"]
-    debug = config.get("debug", False)
-
-    if debug:
-        print("Starting recording process...")
-
-    recorder_process = Process(target=audio_recorder, args=(input_device_id, com_port, debug), daemon=True)
-    recorder_process.start()
-    recorder_process.join()  
-
-    if debug:
-        print("Recording process ended.")
-
-
-if __name__ == "__main__":
-    start()
