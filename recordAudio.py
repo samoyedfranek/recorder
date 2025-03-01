@@ -13,10 +13,6 @@ def save_audio_file(audio_frames, file_name, rate, debug):
     if audio_frames.size == 0:
         return
 
-    cut_samples = rate * 5
-    if len(audio_frames) > cut_samples:
-        audio_frames = audio_frames[:-cut_samples]
-
     file_path = f"./recordings/{file_name}.wav"
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
 
