@@ -55,7 +55,7 @@ def audio_recorder(input_device_id, com_port, debug):
     CHUNK = 2048  # Buffer size, adjust if necessary
     FORMAT = pyaudio.paInt16
     CHANNELS = 1
-    RATE = 44100  # Adjusted to a more common rate
+    RATE = 48000 # Adjusted to a more common rate
     AMPLITUDE_THRESHOLD = 200  # Lower threshold for detecting quieter sounds
     SILENCE_DURATION = 5  # Adjust to how long silence should be before stopping
     SILENCE_CHUNKS = int(SILENCE_DURATION * RATE / CHUNK)
