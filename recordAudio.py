@@ -8,9 +8,9 @@ import pyaudio
 import numpy as np
 from multiprocessing import Process
 
+
 def trim_audio(frames, trim_seconds, rate):
-    """Trim the last `trim_seconds` seconds from the audio data."""
-    trim_samples = trim_seconds * rate * 2  # 2 bytes per sample (16-bit audio)
+    trim_samples = trim_seconds * rate * 2
     total_bytes = sum(len(f) for f in frames)
 
     if total_bytes <= trim_samples:
@@ -31,13 +31,11 @@ def trim_audio(frames, trim_seconds, rate):
 
 
 def load_config():
-    """Load configuration from the config.json file."""
     with open("config.json", "r") as f:
         return json.load(f)
 
 
 def save_audio_file(frames, file_name, rate, channels, format_, debug):
-    """Save the recorded audio to a file."""
     if not frames:
         if debug:
             print("No audio data to save. Skipping file.")
@@ -60,7 +58,6 @@ def save_audio_file(frames, file_name, rate, channels, format_, debug):
 
 
 def audio_recorder(input_device_id, com_port, debug):
-    """Record audio and save it to a file when sound is detected."""
     CHUNK = 1024
     FORMAT = pyaudio.paInt16
     CHANNELS = 1
@@ -87,7 +84,7 @@ def audio_recorder(input_device_id, com_port, debug):
     try:
         while True:
             if not input_stream.is_active():
-                time.sleep(0.01)  # Reduce CPU usage while waiting for data
+                time.sleep(0.01)
                 continue
 
             try:
@@ -148,10 +145,9 @@ def start():
     if debug:
         print("Starting recording process...")
 
-    # Start recorder as a separate process to avoid blocking the main thread
     recorder_process = Process(target=audio_recorder, args=(input_device_id, com_port, debug), daemon=True)
     recorder_process.start()
-    recorder_process.join()  # Ensure the process completes before exiting
+    recorder_process.join()  
 
     if debug:
         print("Recording process ended.")
