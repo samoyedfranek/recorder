@@ -64,7 +64,7 @@ def record():
     CHUNK = 4096
     FORMAT = pyaudio.paInt16
     CHANNELS = 1
-    RATE = 22050
+    RATE = 16000
     AMPLITUDE_THRESHOLD = 200
     SILENCE_DURATION = 5
     SILENCE_CHUNKS = int(SILENCE_DURATION * RATE / CHUNK)
