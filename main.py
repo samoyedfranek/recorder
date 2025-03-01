@@ -1,6 +1,5 @@
 import os
 import time
-import threading
 import json
 from multiprocessing import Process
 from telegramSend import send_to_telegram, send_telegram_status
@@ -46,24 +45,25 @@ def monitor_directory(directory, bot_token, chat_ids):
 
 
 def monitor_and_record(input_device_id, com_port, debug):
-    """Handle monitoring and recording in parallel."""
+    """Handle monitoring and recording in parallel using multiprocessing."""
     print(f"Using input device ID: {input_device_id}")
 
     try:
-        # Start recording process
-        print("Starting recording...")
+        # Send status message
         send_telegram_status(BOT_TOKEN, CHAT_ID, "*Urządzenie gotowe do nagrywania.*")
 
+        # Start recording process
+        print("Starting recording...")
         record_process = Process(target=audio_recorder, args=(input_device_id, com_port, debug))
         record_process.start()
 
-        # Start monitoring directory in a separate thread
-        monitor_thread = threading.Thread(target=monitor_directory, args=(DIRECTORY_TO_MONITOR, BOT_TOKEN, CHAT_ID), daemon=True)
-        monitor_thread.start()
+        # Start directory monitoring as a separate process
+        monitor_process = Process(target=monitor_directory, args=(DIRECTORY_TO_MONITOR, BOT_TOKEN, CHAT_ID))
+        monitor_process.start()
 
-        # Keep main process running
+        # Wait for processes to complete (this will keep the script running)
         record_process.join()
-        monitor_thread.join()
+        monitor_process.join()
 
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
@@ -84,7 +84,7 @@ def main():
     com_port = config["com_port"]
     debug = config.get("debug", False)
 
-    # Start the monitoring and recording process
+    # Start monitoring and recording using multiprocessing
     monitor_and_record(input_device_id, com_port, debug)
 
 

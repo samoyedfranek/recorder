@@ -8,6 +8,27 @@ import numpy as np
 from multiprocessing import Process
 
 
+def trim_audio(frames, trim_seconds, rate):
+    trim_samples = trim_seconds * rate * 2  # 2 bytes per sample (16-bit audio)
+    total_bytes = sum(len(f) for f in frames)
+
+    if total_bytes <= trim_samples:
+        return []
+
+    keep_bytes = total_bytes - trim_samples
+    new_frames, kept = [], 0
+
+    for frame in frames:
+        if kept + len(frame) <= keep_bytes:
+            new_frames.append(frame)
+            kept += len(frame)
+        else:
+            new_frames.append(frame[: keep_bytes - kept])
+            break
+
+    return new_frames
+
+
 def load_config():
     with open("config.json", "r") as f:
         return json.load(f)
@@ -19,6 +40,9 @@ def save_audio_file(frames, file_name, rate, channels, format_, debug):
             print("No audio data to save. Skipping file.")
         return
 
+    frames = trim_audio(frames, trim_seconds=5, rate=rate)
+    audio_data = np.frombuffer(b"".join(frames), dtype=np.int16)
+
     file_path = f"./recordings/{file_name}.wav"
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
 
@@ -26,10 +50,10 @@ def save_audio_file(frames, file_name, rate, channels, format_, debug):
         wf.setnchannels(channels)
         wf.setsampwidth(pyaudio.PyAudio().get_sample_size(format_))
         wf.setframerate(rate)
-        wf.writeframes(b"".join(frames))
+        wf.writeframes(audio_data.tobytes())
 
     if debug:
-        print(f"File saved: {file_path}")
+        print(f"File saved: {file_path} (Trimmed 5s from end)")
 
 
 def audio_recorder(input_device_id, com_port, debug):
