@@ -2,10 +2,9 @@ import os
 import time
 import json
 import threading
-from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler
+from multiprocessing import Process
 from telegramSend import send_to_telegram, send_telegram_status
-from recordAudio import audio_reader
+from recordAudio import recorder
 from cli import load_config, prompt_user_for_config, list_com_ports
 
 CONFIG_FILE = "config.json"
@@ -24,52 +23,57 @@ def prioritize_telegram(file_path, bot_token, chat_ids):
         print(f"Failed to send {file_path} to Telegram.")
 
 
-class DirectoryMonitor(FileSystemEventHandler):
-    def __init__(self, bot_token, chat_ids):
-        self.bot_token = bot_token
-        self.chat_ids = chat_ids
-
-    def on_created(self, event):
-        """Called when a new file is created in the directory."""
-        if event.src_path.endswith(".wav"):
-            time.sleep(0.5)  # Slight delay to ensure file is fully written
-            prioritize_telegram(event.src_path, self.bot_token, self.chat_ids)
-
-
-def monitor_directory(directory, bot_token, chat_ids):
+def monitor_directory(directory, bot_token, chat_ids, stop_event):
+    """Monitor a directory for new files and process them efficiently."""
+    processed_files = set()
     print(f"Monitoring directory: {directory} for new audio files.")
 
-    event_handler = DirectoryMonitor(bot_token, chat_ids)
-    observer = Observer()
-    observer.schedule(event_handler, directory, recursive=False)
-    observer.start()
+    while not stop_event.is_set():
+        try:
+            current_files = set(os.listdir(directory))
+            new_files = current_files - processed_files
 
-    try:
-        while True:
-            time.sleep(1)  # Keep the thread alive
-    except KeyboardInterrupt:
-        observer.stop()
-    observer.join()
+            for file_name in new_files:
+                if file_name.endswith(".wav"):  # Process only WAV files
+                    file_path = os.path.join(directory, file_name)
+                    time.sleep(2)  # Allow time for file writing to complete
+                    prioritize_telegram(file_path, bot_token, chat_ids)
+
+            processed_files = current_files
+        except Exception as e:
+            print(f"Error while monitoring directory: {e}")
+
+        time.sleep(5)  # Reduce CPU usage by checking every 5 seconds
 
 
 def monitor_and_record(input_device_id, com_port, debug):
+    """Handle monitoring and recording in parallel using a process and a thread."""
     print(f"Using input device ID: {input_device_id}")
 
     try:
+        # Send status message
         send_telegram_status(BOT_TOKEN, CHAT_ID, "*Urządzenie gotowe do nagrywania.*")
 
+        # Start recording process
         print("Starting recording...")
-        # Start audio recording in a separate thread
-        record_thread = threading.Thread(target=audio_reader, args=(input_device_id, com_port, debug), daemon=True)
-        record_thread.start()
+        record_process = Process(target=recorder, args=(input_device_id, com_port, debug), daemon=True)
+        record_process.start()
 
-        # Start directory monitoring in a separate thread
-        monitor_thread = threading.Thread(target=monitor_directory, args=(DIRECTORY_TO_MONITOR, BOT_TOKEN, CHAT_ID), daemon=True)
+        # Use threading for file monitoring to reduce CPU usage
+        stop_event = threading.Event()
+        monitor_thread = threading.Thread(target=monitor_directory, args=(DIRECTORY_TO_MONITOR, BOT_TOKEN, CHAT_ID, stop_event), daemon=True)
         monitor_thread.start()
 
-        # Ensure both threads continue running
-        record_thread.join()
+        # Keep script running without blocking
+        while record_process.is_alive():
+            time.sleep(1)
+
+        # Stop the monitoring thread when recording stops
+        stop_event.set()
         monitor_thread.join()
+
+        # Ensure the recording process terminates cleanly
+        record_process.join()
 
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
@@ -77,6 +81,7 @@ def monitor_and_record(input_device_id, com_port, debug):
 
 
 def main():
+    """Main function to start the program."""
     config = load_config()
     if not config:
         print("No previous configuration found. Let's configure your device.")
@@ -90,6 +95,7 @@ def main():
     com_port = config["com_port"]
     debug = config.get("debug", False)
 
+    # Start monitoring and recording
     monitor_and_record(input_device_id, com_port, debug)
 
 

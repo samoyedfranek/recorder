@@ -8,6 +8,7 @@ import threading
 from datetime import datetime
 from serialReader import open_serial_port
 
+
 # Function to trim the audio data
 def trim_audio(audio_frames, trim_seconds, rate):
     trim_samples = trim_seconds * rate * 2  # 2 bytes per sample (16-bit audio)
@@ -17,7 +18,8 @@ def trim_audio(audio_frames, trim_seconds, rate):
         return np.array([])
 
     keep_samples = total_samples - trim_samples
-    return audio_frames[:keep_samples * 2]
+    return audio_frames[: keep_samples * 2]
+
 
 # Function to save the audio data to a file
 def save_audio_file(audio_frames, file_name, rate, channels, debug):
@@ -39,8 +41,9 @@ def save_audio_file(audio_frames, file_name, rate, channels, debug):
     if debug:
         print(f"File saved: {file_path} (Trimmed 5s from end)")
 
+
 # Function to handle the audio stream and callback processing
-def audio_reader(input_device_id, com_port, debug):
+def recorder(input_device_id, com_port, debug):
     RATE = 48000
     AMPLITUDE_THRESHOLD = 200
 
@@ -54,7 +57,7 @@ def audio_reader(input_device_id, com_port, debug):
 
         # Calculate the maximum amplitude in the current audio chunk
         max_amplitude = np.max(np.abs(indata))
-        
+
         # Debugging output
         if debug:
             print(f"Max Amplitude: {max_amplitude}, Silent Chunks: {silent_chunks[0]}, Recording: {recording[0]}")
@@ -82,14 +85,15 @@ def audio_reader(input_device_id, com_port, debug):
                 silent_chunks[0] = 0
 
     # Start the input stream
-    with sd.InputStream(callback=callback, channels=1, samplerate=RATE, device=input_device_id, dtype='int16'):
+    with sd.InputStream(callback=callback, channels=1, samplerate=RATE, device=input_device_id, dtype="int16"):
         while True:
             time.sleep(0.05)  # Reduce CPU usage
+
 
 # Function to start the recording process
 def start_recording(input_device_id, com_port, debug):
     # Start audio reader in a separate thread
-    reader_thread = threading.Thread(target=audio_reader, args=(input_device_id, com_port, debug), daemon=True)
+    reader_thread = threading.Thread(target=recorder, args=(input_device_id, com_port, debug), daemon=True)
     reader_thread.start()
 
     try:
@@ -100,16 +104,18 @@ def start_recording(input_device_id, com_port, debug):
         print("Recording stopped.")
         reader_thread.join()
 
+
 # Main entry point
 def main():
     # Load configuration
     config = json.load(open("config.json"))
     input_device_id = config["input_device"]
-    com_port = open_serial_port(config['com_port'])  # Assuming open_serial_port generates or retrieves the com_port
+    com_port = open_serial_port(config["com_port"])  # Assuming open_serial_port generates or retrieves the com_port
     debug = config.get("debug", False)
 
     # Start the recording process
     start_recording(input_device_id, com_port, debug)
+
 
 if __name__ == "__main__":
     main()
