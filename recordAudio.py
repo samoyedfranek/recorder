@@ -41,7 +41,7 @@ def save_audio_file(audio_frames, file_name, rate, channels, debug):
 
 # Function to handle the audio stream and callback processing
 def audio_reader(input_device_id, com_port, debug):
-    RATE = 44100
+    RATE = 48000
     AMPLITUDE_THRESHOLD = 200
 
     audio_frames = []
