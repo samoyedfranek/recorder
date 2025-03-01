@@ -1,16 +1,16 @@
-import threading
 import os
 import time
+import threading
+import json
+from multiprocessing import Process, Queue
 from telegramSend import send_to_telegram, send_telegram_status
-from recordAudio import record
+from recordAudio import audio_recorder
 from cli import load_config, prompt_user_for_config, list_com_ports
 
 CONFIG_FILE = "config.json"
 BOT_TOKEN = "7759050359:AAF4tx3FUZWpBkkyuIK_miihDtzfP39WoCM"
-# CHAT_ID = ["6088271522"]
-CHAT_ID = ['6088271522', '5491210881']
+CHAT_ID = ["6088271522", "5491210881"]
 DIRECTORY_TO_MONITOR = "./recordings"
-
 
 def prioritize_telegram(file_path, bot_token, chat_ids):
     """Send the file to Telegram."""
@@ -20,7 +20,6 @@ def prioritize_telegram(file_path, bot_token, chat_ids):
         print(f"File {file_path} sent to Telegram successfully.")
     else:
         print(f"Failed to send {file_path} to Telegram.")
-
 
 def monitor_directory(directory, bot_token, chat_ids):
     """Monitor a directory for new files and process them."""
@@ -35,7 +34,7 @@ def monitor_directory(directory, bot_token, chat_ids):
             for file_name in new_files:
                 if file_name.endswith(".wav"):  # Process only WAV files
                     file_path = os.path.join(directory, file_name)
-                    time.sleep(5)
+                    time.sleep(5)  # Ensure file writing is complete
                     prioritize_telegram(file_path, bot_token, chat_ids)
 
             processed_files = current_files
@@ -43,35 +42,37 @@ def monitor_directory(directory, bot_token, chat_ids):
             print(f"Error while monitoring directory: {e}")
         time.sleep(2)
 
-
-def monitor_and_record(input_device_id):
+def monitor_and_record(input_device_id, com_port, debug):
     """Handle monitoring and recording in parallel."""
     print(f"Using input device ID: {input_device_id}")
 
     try:
-        # Start recording
+        # Start recording process
         print("Starting recording...")
         send_telegram_status(BOT_TOKEN, CHAT_ID, "*Urządzenie gotowe do nagrywania.*")
-        record_thread = threading.Thread(target=record)
-        record_thread.start()
 
-        # Start monitoring directory
+        queue = Queue()
+
+        record_process = Process(target=audio_recorder, args=(queue, input_device_id, com_port, debug))
+        record_process.start()
+
+        # Start monitoring directory in a separate thread
         monitor_thread = threading.Thread(
-            target=monitor_directory,
-            args=(DIRECTORY_TO_MONITOR, BOT_TOKEN, CHAT_ID),
+            target=monitor_directory, 
+            args=(DIRECTORY_TO_MONITOR, BOT_TOKEN, CHAT_ID), 
+            daemon=True
         )
         monitor_thread.start()
 
-        # Join threads before exiting
-        record_thread.join()
+        # Keep main process running
+        record_process.join()
         monitor_thread.join()
 
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
 
-
 def main():
-    # Prompt user for configuration (COM port and audio input device)
+    """Main function to start the program."""
     config = load_config()
     if not config:
         print("No previous configuration found. Let's configure your device.")
@@ -81,9 +82,12 @@ def main():
         print("Configuration not completed, exiting.")
         return
 
-    # Start the monitoring and recording process
-    monitor_and_record(config["input_device"])
+    input_device_id = config["input_device"]
+    com_port = config["com_port"]
+    debug = config.get("debug", False)
 
+    # Start the monitoring and recording process
+    monitor_and_record(input_device_id, com_port, debug)
 
 if __name__ == "__main__":
     main()
