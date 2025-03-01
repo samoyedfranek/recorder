@@ -2,11 +2,10 @@ import os
 import time
 import json
 import threading
-from multiprocessing import Process
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from telegramSend import send_to_telegram, send_telegram_status
-from recordAudio import audio_recorder
+from recordAudio import audio_reader
 from cli import load_config, prompt_user_for_config, list_com_ports
 
 CONFIG_FILE = "config.json"
@@ -26,7 +25,6 @@ def prioritize_telegram(file_path, bot_token, chat_ids):
 
 
 class DirectoryMonitor(FileSystemEventHandler):
-
     def __init__(self, bot_token, chat_ids):
         self.bot_token = bot_token
         self.chat_ids = chat_ids
@@ -34,7 +32,7 @@ class DirectoryMonitor(FileSystemEventHandler):
     def on_created(self, event):
         """Called when a new file is created in the directory."""
         if event.src_path.endswith(".wav"):
-            time.sleep(2) 
+            time.sleep(0.5)  # Slight delay to ensure file is fully written
             prioritize_telegram(event.src_path, self.bot_token, self.chat_ids)
 
 
@@ -48,10 +46,9 @@ def monitor_directory(directory, bot_token, chat_ids):
 
     try:
         while True:
-            time.sleep(1) 
+            time.sleep(1)  # Keep the thread alive
     except KeyboardInterrupt:
         observer.stop()
-
     observer.join()
 
 
@@ -62,14 +59,16 @@ def monitor_and_record(input_device_id, com_port, debug):
         send_telegram_status(BOT_TOKEN, CHAT_ID, "*Urządzenie gotowe do nagrywania.*")
 
         print("Starting recording...")
-        record_process = Process(target=audio_recorder, args=(input_device_id, com_port, debug), daemon=True)
-        record_process.start()
+        # Start audio recording in a separate thread
+        record_thread = threading.Thread(target=audio_reader, args=(input_device_id, com_port, debug), daemon=True)
+        record_thread.start()
 
+        # Start directory monitoring in a separate thread
         monitor_thread = threading.Thread(target=monitor_directory, args=(DIRECTORY_TO_MONITOR, BOT_TOKEN, CHAT_ID), daemon=True)
         monitor_thread.start()
 
-        record_process.join()
-
+        # Ensure both threads continue running
+        record_thread.join()
         monitor_thread.join()
 
     except Exception as e:
