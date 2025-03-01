@@ -3,6 +3,8 @@ import time
 import json
 import threading
 from multiprocessing import Process
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
 from telegramSend import send_to_telegram, send_telegram_status
 from recordAudio import audio_recorder
 from cli import load_config, prompt_user_for_config, list_com_ports
@@ -23,27 +25,35 @@ def prioritize_telegram(file_path, bot_token, chat_ids):
         print(f"Failed to send {file_path} to Telegram.")
 
 
-def monitor_directory(directory, bot_token, chat_ids, stop_event):
-    """Monitor a directory for new files and process them efficiently."""
-    processed_files = set()
+class DirectoryMonitor(FileSystemEventHandler):
+    """Handles file system events for the directory."""
+    def __init__(self, bot_token, chat_ids):
+        self.bot_token = bot_token
+        self.chat_ids = chat_ids
+
+    def on_created(self, event):
+        """Called when a new file is created in the directory."""
+        if event.src_path.endswith(".wav"):
+            time.sleep(2)  # Allow time for file writing to complete
+            prioritize_telegram(event.src_path, self.bot_token, self.chat_ids)
+
+
+def monitor_directory(directory, bot_token, chat_ids):
+    """Monitor a directory for new files using watchdog."""
     print(f"Monitoring directory: {directory} for new audio files.")
 
-    while not stop_event.is_set():
-        try:
-            current_files = set(os.listdir(directory))
-            new_files = current_files - processed_files
+    event_handler = DirectoryMonitor(bot_token, chat_ids)
+    observer = Observer()
+    observer.schedule(event_handler, directory, recursive=False)
+    observer.start()
 
-            for file_name in new_files:
-                if file_name.endswith(".wav"):  # Process only WAV files
-                    file_path = os.path.join(directory, file_name)
-                    time.sleep(2)  # Allow time for file writing
-                    prioritize_telegram(file_path, bot_token, chat_ids)
+    try:
+        while True:
+            time.sleep(1)  # Allow the observer to work
+    except KeyboardInterrupt:
+        observer.stop()
 
-            processed_files = current_files
-        except Exception as e:
-            print(f"Error while monitoring directory: {e}")
-
-        time.sleep(5)  # Reduce CPU usage by checking every 5 seconds
+    observer.join()
 
 
 def monitor_and_record(input_device_id, com_port, debug):
@@ -59,21 +69,19 @@ def monitor_and_record(input_device_id, com_port, debug):
         record_process = Process(target=audio_recorder, args=(input_device_id, com_port, debug), daemon=True)
         record_process.start()
 
-        # Use threading for file monitoring to reduce CPU usage
-        stop_event = threading.Event()
-        monitor_thread = threading.Thread(target=monitor_directory, args=(DIRECTORY_TO_MONITOR, BOT_TOKEN, CHAT_ID, stop_event), daemon=True)
+        # Start file monitoring in a separate thread
+        monitor_thread = threading.Thread(target=monitor_directory, args=(DIRECTORY_TO_MONITOR, BOT_TOKEN, CHAT_ID), daemon=True)
         monitor_thread.start()
 
-        # Keep script running without blocking
-        while record_process.is_alive():
-            time.sleep(1)
+        # Wait for the recording process to finish
+        record_process.join()
 
-        # Stop the monitoring thread when recording stops
-        stop_event.set()
+        # Ensure the monitoring thread runs until the process is done
         monitor_thread.join()
 
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
+        send_telegram_status(BOT_TOKEN, CHAT_ID, "*Wystąpił błąd w urządzeniu, wymagane ponowne uruchomienie.*")
 
 
 def main():

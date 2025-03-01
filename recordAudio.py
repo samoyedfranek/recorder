@@ -8,8 +8,8 @@ import pyaudio
 import numpy as np
 from multiprocessing import Process
 
-
 def trim_audio(frames, trim_seconds, rate):
+    """Trim the last `trim_seconds` seconds from the audio data."""
     trim_samples = trim_seconds * rate * 2  # 2 bytes per sample (16-bit audio)
     total_bytes = sum(len(f) for f in frames)
 
@@ -31,11 +31,13 @@ def trim_audio(frames, trim_seconds, rate):
 
 
 def load_config():
+    """Load configuration from the config.json file."""
     with open("config.json", "r") as f:
         return json.load(f)
 
 
 def save_audio_file(frames, file_name, rate, channels, format_, debug):
+    """Save the recorded audio to a file."""
     if not frames:
         if debug:
             print("No audio data to save. Skipping file.")
@@ -58,6 +60,7 @@ def save_audio_file(frames, file_name, rate, channels, format_, debug):
 
 
 def audio_recorder(input_device_id, com_port, debug):
+    """Record audio and save it to a file when sound is detected."""
     CHUNK = 1024
     FORMAT = pyaudio.paInt16
     CHANNELS = 1
@@ -82,7 +85,11 @@ def audio_recorder(input_device_id, com_port, debug):
     filename = None
 
     try:
-        while input_stream.is_active():
+        while True:
+            if not input_stream.is_active():
+                time.sleep(0.01)  # Reduce CPU usage while waiting for data
+                continue
+
             try:
                 data = input_stream.read(CHUNK, exception_on_overflow=False)
                 audio_data = np.frombuffer(data, dtype=np.int16)
@@ -117,8 +124,6 @@ def audio_recorder(input_device_id, com_port, debug):
                     frames.clear()
                     recording = False
 
-            time.sleep(0.1)  # Reduce CPU usage
-
     except KeyboardInterrupt:
         if debug:
             print("Program terminated.")
@@ -134,6 +139,7 @@ def audio_recorder(input_device_id, com_port, debug):
 
 
 def start():
+    """Start the audio recording process."""
     config = load_config()
     input_device_id = config["input_device"]
     com_port = config["com_port"]
@@ -142,7 +148,7 @@ def start():
     if debug:
         print("Starting recording process...")
 
-    # Start recorder as a separate process
+    # Start recorder as a separate process to avoid blocking the main thread
     recorder_process = Process(target=audio_recorder, args=(input_device_id, com_port, debug), daemon=True)
     recorder_process.start()
     recorder_process.join()  # Ensure the process completes before exiting
