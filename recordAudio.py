@@ -1,123 +1,89 @@
 import os
-import wave
+import numpy as np
+import sounddevice as sd
+from scipy.io.wavfile import write
 import json
 import time
-import sounddevice as sd
-import numpy as np
 import threading
 from datetime import datetime
 from serialReader import open_serial_port
 
 
-# Function to trim the audio data
-def trim_audio(audio_frames, trim_seconds, rate):
-    trim_samples = trim_seconds * rate * 2  # 2 bytes per sample (16-bit audio)
-    total_samples = len(audio_frames) // 2
-
-    if total_samples <= trim_samples:
-        return np.array([])
-
-    keep_samples = total_samples - trim_samples
-    return audio_frames[: keep_samples * 2]
-
-
-# Function to save the audio data to a file
-def save_audio_file(audio_frames, file_name, rate, channels, debug):
+def save_audio_file(audio_frames, file_name, rate, debug):
     if audio_frames.size == 0:
-        if debug:
-            print("No audio data to save. Skipping file.")
         return
 
-    audio_frames = trim_audio(audio_frames, trim_seconds=5, rate=rate)
+    cut_samples = rate * 5
+    if len(audio_frames) > cut_samples:
+        audio_frames = audio_frames[:-cut_samples]
+
     file_path = f"./recordings/{file_name}.wav"
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
 
-    with wave.open(file_path, "wb") as wf:
-        wf.setnchannels(channels)
-        wf.setsampwidth(2)  # 2 bytes per sample (16-bit audio)
-        wf.setframerate(rate)
-        wf.writeframes(audio_frames.tobytes())
+    write(file_path, rate, audio_frames.astype(np.int16))
 
     if debug:
-        print(f"File saved: {file_path} (Trimmed 5s from end)")
+        print(f"File saved: {file_path}")
 
 
-# Function to handle the audio stream and callback processing
 def recorder(input_device_id, com_port, debug):
     RATE = 48000
     AMPLITUDE_THRESHOLD = 200
-    SILENCE_THRESHOLD = 5  # 5 seconds of silence to stop recording
+    SILENCE_THRESHOLD = 5
 
-    audio_frames = []
-    silent_chunks = 0  # Count of silent chunks
+    audio_frames = np.array([])
+    last_sound_time = None
     recording = [False]
-    silent_chunk_limit = int(SILENCE_THRESHOLD * RATE / 1024)  # approx 5 sec of silence based on chunk size
 
-    def callback(indata, frames, time, status):
-        nonlocal silent_chunks
-        if status:
-            print(status)
+    def callback(indata, frames, time_info, status):
+        nonlocal last_sound_time, audio_frames
 
-        # Calculate the maximum amplitude in the current audio chunk
+        if indata is None or len(indata) == 0:
+            return
+
         max_amplitude = np.max(np.abs(indata))
 
-        # Debugging output
-        if debug:
-            # print(f"Max Amplitude: {max_amplitude}, Silent Chunks: {silent_chunks}, Recording: {recording[0]}")
-            pass
-
-        # Check if the amplitude exceeds the threshold
         if max_amplitude > AMPLITUDE_THRESHOLD:
-            silent_chunks = 0  # Reset silence counter
+            last_sound_time = time.time()
             if not recording[0]:
-                audio_frames.clear()  # Clear previous frames
+                audio_frames = np.array([])
             recording[0] = True
-            audio_frames.extend(indata)
+            audio_frames = np.concatenate((audio_frames, indata.flatten()))
 
-        # If recording and the amplitude falls below the threshold
         elif recording[0]:
-            silent_chunks += 1
-            audio_frames.extend(indata)
-            if silent_chunks >= silent_chunk_limit:  # Stop after 5 seconds of silence
-                # Generate filename using com_port and timestamp
-                filename = f"{com_port}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-                if debug:
-                    print(f"Stopping and saving audio file: {filename} after {SILENCE_THRESHOLD} seconds of silence.")
-                save_audio_file(np.array(audio_frames), filename, RATE, 1, debug)
-                audio_frames.clear()
-                recording[0] = False
-                silent_chunks = 0
+            audio_frames = np.concatenate((audio_frames, indata.flatten()))
 
-    # Start the input stream
+            if time.time() - last_sound_time > SILENCE_THRESHOLD:
+                serial_name = open_serial_port(com_port)
+                filename = f"{serial_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                save_audio_file(audio_frames, filename, RATE, debug)
+                audio_frames = np.array([])
+                recording[0] = False
+                last_sound_time = None
+
     with sd.InputStream(callback=callback, channels=1, samplerate=RATE, device=input_device_id, dtype="int16"):
         while True:
-            time.sleep(0.05)  # Reduce CPU usage
+            time.sleep(0.05)
 
 
-# Function to start the recording process
 def start_recording(input_device_id, com_port, debug):
-    # Start audio reader in a separate thread
     reader_thread = threading.Thread(target=recorder, args=(input_device_id, com_port, debug), daemon=True)
     reader_thread.start()
 
     try:
         while True:
-            time.sleep(1)  # Keep the main loop alive
-
+            time.sleep(1)
     except KeyboardInterrupt:
         print("Recording stopped.")
         reader_thread.join()
 
 
-# Main entry point
 def main():
-    # Load configuration
     config = json.load(open("config.json"))
     input_device_id = config["input_device"]
-    com_port = open_serial_port(config["com_port"])  # Assuming open_serial_port generates or retrieves the com_port
+    com_port = open_serial_port(config["com_port"])
     debug = config.get("debug", False)
 
-    # Start the recording process
     start_recording(input_device_id, com_port, debug)
 
 
