@@ -61,10 +61,10 @@ def record():
     com_port = config["com_port"]
     debug = config.get("debug", False)
 
-    CHUNK = 1024
+    CHUNK = 2048
     FORMAT = pyaudio.paInt16
     CHANNELS = 1
-    RATE = 48000
+    RATE = 22050
     AMPLITUDE_THRESHOLD = 200
     SILENCE_DURATION = 5
     SILENCE_CHUNKS = int(SILENCE_DURATION * RATE / CHUNK)
