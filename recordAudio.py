@@ -46,12 +46,15 @@ def save_audio_file(audio_frames, file_name, rate, channels, debug):
 def recorder(input_device_id, com_port, debug):
     RATE = 48000
     AMPLITUDE_THRESHOLD = 200
+    SILENCE_THRESHOLD = 5  # 5 seconds of silence to stop recording
 
     audio_frames = []
-    silent_chunks = [0]
+    silent_chunks = 0  # Count of silent chunks
     recording = [False]
+    silent_chunk_limit = int(SILENCE_THRESHOLD * RATE / 1024)  # approx 5 sec of silence based on chunk size
 
     def callback(indata, frames, time, status):
+        nonlocal silent_chunks
         if status:
             print(status)
 
@@ -60,11 +63,12 @@ def recorder(input_device_id, com_port, debug):
 
         # Debugging output
         if debug:
-            print(f"Max Amplitude: {max_amplitude}, Silent Chunks: {silent_chunks[0]}, Recording: {recording[0]}")
+            # print(f"Max Amplitude: {max_amplitude}, Silent Chunks: {silent_chunks}, Recording: {recording[0]}")
+            pass
 
         # Check if the amplitude exceeds the threshold
         if max_amplitude > AMPLITUDE_THRESHOLD:
-            silent_chunks[0] = 0
+            silent_chunks = 0  # Reset silence counter
             if not recording[0]:
                 audio_frames.clear()  # Clear previous frames
             recording[0] = True
@@ -72,17 +76,17 @@ def recorder(input_device_id, com_port, debug):
 
         # If recording and the amplitude falls below the threshold
         elif recording[0]:
-            silent_chunks[0] += 1
+            silent_chunks += 1
             audio_frames.extend(indata)
-            if silent_chunks[0] >= 100:  # Threshold for silence
+            if silent_chunks >= silent_chunk_limit:  # Stop after 5 seconds of silence
                 # Generate filename using com_port and timestamp
                 filename = f"{com_port}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
                 if debug:
-                    print(f"Saving audio file: {filename}")
+                    print(f"Stopping and saving audio file: {filename} after {SILENCE_THRESHOLD} seconds of silence.")
                 save_audio_file(np.array(audio_frames), filename, RATE, 1, debug)
                 audio_frames.clear()
                 recording[0] = False
-                silent_chunks[0] = 0
+                silent_chunks = 0
 
     # Start the input stream
     with sd.InputStream(callback=callback, channels=1, samplerate=RATE, device=input_device_id, dtype="int16"):
