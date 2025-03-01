@@ -33,11 +33,11 @@ def recorder(input_device_id, com_port, debug):
     RATE = 48000
     AMPLITUDE_THRESHOLD = 200
     SILENCE_THRESHOLD = 5
-    CHUNK_SIZE = 2048  # Increased buffer size
+    CHUNK_SIZE = 1024
 
-    audio_frames = np.array([])  
+    audio_frames = np.array([])
     last_sound_time = None
-    recording = [False]  
+    recording = [False]
     temp_file_path = None
     wf = None
 
@@ -46,7 +46,7 @@ def recorder(input_device_id, com_port, debug):
 
     serial_name = open_serial_port(com_port)
 
-    stream_active = True  # Track stream status
+    stream_active = True
 
     try:
         while True:
@@ -54,9 +54,6 @@ def recorder(input_device_id, com_port, debug):
                 indata = np.frombuffer(stream.read(CHUNK_SIZE, exception_on_overflow=False), dtype=np.int16)
 
                 max_amplitude = np.max(np.abs(indata))
-
-                if debug:
-                    print(f"Current max amplitude: {max_amplitude}")
 
                 if max_amplitude > AMPLITUDE_THRESHOLD:
                     if not recording[0]:
@@ -92,19 +89,18 @@ def recorder(input_device_id, com_port, debug):
                         final_file_path = f"./recordings/{filename}"
                         move_file_to_recordings(temp_file_path, final_file_path)
 
-                        audio_frames = np.array([])  
+                        audio_frames = np.array([])
                         recording[0] = False
                         last_sound_time = None
 
             except IOError as e:
                 print(f"Audio read error: {e}")
-                time.sleep(0.1)  # Small delay to avoid continuous overflow errors
+                time.sleep(0.1)
 
     except KeyboardInterrupt:
         print("Recording stopped.")
 
     finally:
-        # Safely handle stream closing
         if stream_active:
             try:
                 stream.stop_stream()
