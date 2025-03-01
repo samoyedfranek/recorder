@@ -23,7 +23,7 @@ def save_audio_file(audio_frames, file_name, rate, debug):
     write(file_path, rate, audio_frames.astype(np.int16))
 
     if debug:
-        print(f"File saved: {file_path}")
+        print(f"File saved: {file_path} with {len(audio_frames)} samples")
 
 
 def recorder(input_device_id, com_port, debug):
@@ -41,12 +41,18 @@ def recorder(input_device_id, com_port, debug):
         if indata is None or len(indata) == 0:
             return
 
+        # Compute maximum amplitude
         max_amplitude = np.max(np.abs(indata))
+
+        # Print the current max amplitude (for debugging purposes)
+        if debug:
+            print(f"Current max amplitude: {max_amplitude}")
 
         if max_amplitude > AMPLITUDE_THRESHOLD:
             last_sound_time = time.time()
             if not recording[0]:
-                audio_frames = np.array([])
+                print("Recording started.")
+                audio_frames = np.array([])  # Clear audio frames when starting new recording
             recording[0] = True
             audio_frames = np.concatenate((audio_frames, indata.flatten()))
 
@@ -54,10 +60,12 @@ def recorder(input_device_id, com_port, debug):
             audio_frames = np.concatenate((audio_frames, indata.flatten()))
 
             if time.time() - last_sound_time > SILENCE_THRESHOLD:
+                # Save the audio after detecting silence
                 serial_name = open_serial_port(com_port)
                 filename = f"{serial_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                print(f"Silence detected. Saving audio file: {filename}")
                 save_audio_file(audio_frames, filename, RATE, debug)
-                audio_frames = np.array([])
+                audio_frames = np.array([])  # Clear audio frames after saving
                 recording[0] = False
                 last_sound_time = None
 
@@ -84,6 +92,7 @@ def main():
     com_port = open_serial_port(config["com_port"])
     debug = config.get("debug", False)
 
+    print(f"Starting recording on device {input_device_id} with COM port {com_port}")
     start_recording(input_device_id, com_port, debug)
 
 
