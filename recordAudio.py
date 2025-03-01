@@ -33,7 +33,7 @@ def recorder(input_device_id, com_port, debug):
     RATE = 48000
     AMPLITUDE_THRESHOLD = 200
     SILENCE_THRESHOLD = 5
-    CHUNK_SIZE = 1024
+    CHUNK_SIZE = 2048  # Increased buffer size
 
     audio_frames = np.array([])  
     last_sound_time = None
@@ -50,53 +50,55 @@ def recorder(input_device_id, com_port, debug):
 
     try:
         while True:
-            indata = np.frombuffer(stream.read(CHUNK_SIZE), dtype=np.int16)
+            try:
+                indata = np.frombuffer(stream.read(CHUNK_SIZE, exception_on_overflow=False), dtype=np.int16)
 
-            max_amplitude = np.max(np.abs(indata))
+                max_amplitude = np.max(np.abs(indata))
 
-            if debug:
-                print(f"Current max amplitude: {max_amplitude}")
+                if debug:
+                    print(f"Current max amplitude: {max_amplitude}")
 
-            if max_amplitude > AMPLITUDE_THRESHOLD:
-                if not recording[0]:
-                    print("Recording started.")
-                    filename = f"{serial_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.wav"
-                    temp_file_path = f"./cache/{filename}"
-                    os.makedirs(os.path.dirname(temp_file_path), exist_ok=True)
+                if max_amplitude > AMPLITUDE_THRESHOLD:
+                    if not recording[0]:
+                        print("Recording started.")
+                        filename = f"{serial_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.wav"
+                        temp_file_path = f"./cache/{filename}"
+                        os.makedirs(os.path.dirname(temp_file_path), exist_ok=True)
 
-                    wf = wave.open(temp_file_path, "wb")
-                    wf.setnchannels(1)
-                    wf.setsampwidth(2)
-                    wf.setframerate(RATE)
+                        wf = wave.open(temp_file_path, "wb")
+                        wf.setnchannels(1)
+                        wf.setsampwidth(2)
+                        wf.setframerate(RATE)
 
-                    save_audio_chunk(wf, indata, debug, RATE)
+                        save_audio_chunk(wf, indata, debug, RATE)
 
-                    recording[0] = True
-                    last_sound_time = time.time()
-                    audio_frames = indata
+                        recording[0] = True
+                        last_sound_time = time.time()
+                        audio_frames = indata
 
-                else:
+                    else:
+                        audio_frames = np.concatenate((audio_frames, indata))
+                        last_sound_time = time.time()
+
+                elif recording[0]:
                     audio_frames = np.concatenate((audio_frames, indata))
-                    last_sound_time = time.time()
 
-            elif recording[0]:
-                audio_frames = np.concatenate((audio_frames, indata))
+                    if time.time() - last_sound_time > SILENCE_THRESHOLD:
+                        print(f"Silence detected for {SILENCE_THRESHOLD} seconds. Saving audio file: {temp_file_path}")
+                        save_audio_chunk(wf, audio_frames, debug, RATE)
 
-                if time.time() - last_sound_time > SILENCE_THRESHOLD:
-                    print(f"Silence detected for {SILENCE_THRESHOLD} seconds. Saving audio file: {temp_file_path}")
-                    save_audio_chunk(wf, audio_frames, debug, RATE)
+                        wf.close()
 
-                    wf.close()
+                        final_file_path = f"./recordings/{filename}"
+                        move_file_to_recordings(temp_file_path, final_file_path)
 
-                    final_file_path = f"./recordings/{filename}"
-                    move_file_to_recordings(temp_file_path, final_file_path)
+                        audio_frames = np.array([])  
+                        recording[0] = False
+                        last_sound_time = None
 
-                    audio_frames = np.array([])  
-                    recording[0] = False
-                    last_sound_time = None
-
-            elif max_amplitude <= AMPLITUDE_THRESHOLD:
-                last_sound_time = time.time()
+            except IOError as e:
+                print(f"Audio read error: {e}")
+                time.sleep(0.1)  # Small delay to avoid continuous overflow errors
 
     except KeyboardInterrupt:
         print("Recording stopped.")
