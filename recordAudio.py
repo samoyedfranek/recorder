@@ -31,7 +31,7 @@ def save_audio_chunk(wave_file, audio_frames, debug, RATE):
 
 def recorder(input_device_id, com_port, debug):
     RATE = 48000
-    AMPLITUDE_THRESHOLD = 200
+    AMPLITUDE_THRESHOLD = 300
     SILENCE_THRESHOLD = 5
     CHUNK_SIZE = 1024
 
