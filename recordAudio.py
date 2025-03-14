@@ -15,12 +15,6 @@ def move_file_to_recordings(temp_file_path, final_file_path):
     print(f"File moved to: {final_file_path}")
 
 
-def save_audio_chunk(wave_file, audio_frames):
-    """Writes audio frames to the WAV file."""
-    if audio_frames:
-        wave_file.writeframes(audio_frames)
-
-
 def recorder(input_device_id, com_port, debug):
     RATE = 48000  # Sample rate
     AMPLITUDE_THRESHOLD = 300  # Sound detection threshold
@@ -28,7 +22,6 @@ def recorder(input_device_id, com_port, debug):
     CHUNK_SIZE = 4096  # Larger buffer size to reduce CPU load
     CUT_SAMPLES = RATE * 5 * 2  # 5 seconds of audio to cut (2 bytes per sample)
 
-    audio_frames = bytearray()
     last_sound_time = None
     recording = False
     temp_file_path = None
@@ -60,31 +53,25 @@ def recorder(input_device_id, com_port, debug):
 
                         recording = True
                         last_sound_time = time.time()
-                        audio_frames.extend(indata)
-                    else:
-                        audio_frames.extend(indata)
-                        last_sound_time = time.time()
 
-                    # Write to file continuously (minimizes memory usage)
-                    save_audio_chunk(wf, indata)
+                    wf.writeframes(indata)  # Write chunks directly to file
+                    last_sound_time = time.time()
 
                 elif recording:
-                    audio_frames.extend(indata)
-
                     if time.time() - last_sound_time > SILENCE_THRESHOLD:
-                        print(f"Silence detected for {SILENCE_THRESHOLD} seconds. Saving audio file: {temp_file_path}")
+                        print(f"Silence detected for {SILENCE_THRESHOLD} seconds. Finalizing: {temp_file_path}")
 
-                        # Cut the last 5 seconds before final save
-                        if len(audio_frames) > CUT_SAMPLES:
-                            audio_frames = audio_frames[:-CUT_SAMPLES]
+                        # Cut the last 5 seconds before saving
+                        wf._file.seek(0, 2)  # Move to the end
+                        file_size = wf._file.tell()
+                        if file_size > CUT_SAMPLES:
+                            wf._file.truncate(file_size - CUT_SAMPLES)
 
-                        save_audio_chunk(wf, audio_frames)
                         wf.close()
 
                         final_file_path = f"./recordings/{filename}"
                         move_file_to_recordings(temp_file_path, final_file_path)
 
-                        audio_frames = bytearray()
                         recording = False
                         last_sound_time = None
 

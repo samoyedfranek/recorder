@@ -54,7 +54,7 @@ def monitor_and_record(input_device_id, com_port, debug):
         send_telegram_status(BOT_TOKEN, CHAT_ID, "*Urządzenie gotowe do nagrywania.*")
 
         # Start recording in a thread
-        print("Starting recording...")
+        print("Listening...")
         record_thread = threading.Thread(target=recorder, args=(input_device_id, com_port, debug), daemon=True)
         record_thread.start()
 
