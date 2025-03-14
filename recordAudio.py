@@ -1,37 +1,34 @@
 import os
 import time
-import numpy as np
 import wave
 import json
 import threading
 import pyaudio
+import shutil
 from datetime import datetime
 from serialReader import open_serial_port
-import shutil
 
 
 def move_file_to_recordings(temp_file_path, final_file_path):
+    """Moves the final WAV file to the recordings directory."""
     shutil.move(temp_file_path, final_file_path)
     print(f"File moved to: {final_file_path}")
 
 
-def save_audio_chunk(wave_file, audio_frames, debug):
-    if audio_frames.size == 0:
-        return
-
-    wave_file.writeframes(audio_frames.astype(np.int16).tobytes())
-
-    if debug:
-        print(f"Writing {len(audio_frames)} samples to file")
+def save_audio_chunk(wave_file, audio_frames):
+    """Writes audio frames to the WAV file."""
+    if audio_frames:
+        wave_file.writeframes(audio_frames)
 
 
 def recorder(input_device_id, com_port, debug):
-    RATE = 48000
-    AMPLITUDE_THRESHOLD = 300
-    SILENCE_THRESHOLD = 5
-    CHUNK_SIZE = 2048  # Increased for smoother audio processing
+    RATE = 48000  # Sample rate
+    AMPLITUDE_THRESHOLD = 300  # Sound detection threshold
+    SILENCE_THRESHOLD = 5  # Silence duration to stop recording (seconds)
+    CHUNK_SIZE = 4096  # Larger buffer size to reduce CPU load
+    CUT_SAMPLES = RATE * 5 * 2  # 5 seconds of audio to cut (2 bytes per sample)
 
-    audio_frames = np.array([], dtype=np.int16)
+    audio_frames = bytearray()
     last_sound_time = None
     recording = False
     temp_file_path = None
@@ -45,9 +42,9 @@ def recorder(input_device_id, com_port, debug):
     try:
         while True:
             try:
-                indata = np.frombuffer(stream.read(CHUNK_SIZE, exception_on_overflow=False), dtype=np.int16)
+                indata = stream.read(CHUNK_SIZE, exception_on_overflow=False)
 
-                max_amplitude = np.max(np.abs(indata))
+                max_amplitude = max(abs(int.from_bytes(indata[i : i + 2], "little", signed=True)) for i in range(0, len(indata), 2))
 
                 if max_amplitude > AMPLITUDE_THRESHOLD:
                     if not recording:
@@ -63,27 +60,31 @@ def recorder(input_device_id, com_port, debug):
 
                         recording = True
                         last_sound_time = time.time()
-                        audio_frames = indata
+                        audio_frames.extend(indata)
                     else:
-                        audio_frames = np.concatenate((audio_frames, indata))
+                        audio_frames.extend(indata)
                         last_sound_time = time.time()
 
-                    # Write continuously to file to avoid buffer issues
-                    save_audio_chunk(wf, indata, debug)
+                    # Write to file continuously (minimizes memory usage)
+                    save_audio_chunk(wf, indata)
 
                 elif recording:
-                    audio_frames = np.concatenate((audio_frames, indata))
+                    audio_frames.extend(indata)
 
                     if time.time() - last_sound_time > SILENCE_THRESHOLD:
                         print(f"Silence detected for {SILENCE_THRESHOLD} seconds. Saving audio file: {temp_file_path}")
-                        save_audio_chunk(wf, audio_frames, debug)
 
+                        # Cut the last 5 seconds before final save
+                        if len(audio_frames) > CUT_SAMPLES:
+                            audio_frames = audio_frames[:-CUT_SAMPLES]
+
+                        save_audio_chunk(wf, audio_frames)
                         wf.close()
 
                         final_file_path = f"./recordings/{filename}"
                         move_file_to_recordings(temp_file_path, final_file_path)
 
-                        audio_frames = np.array([], dtype=np.int16)
+                        audio_frames = bytearray()
                         recording = False
                         last_sound_time = None
 
@@ -107,6 +108,7 @@ def recorder(input_device_id, com_port, debug):
 
 
 def start_recording(input_device_id, com_port, debug):
+    """Starts the recording in a separate thread."""
     recorder_thread = threading.Thread(target=recorder, args=(input_device_id, com_port, debug), daemon=True)
     recorder_thread.start()
 
@@ -119,6 +121,7 @@ def start_recording(input_device_id, com_port, debug):
 
 
 def main():
+    """Main function to load config and start recording."""
     config = json.load(open("config.json"))
     input_device_id = config["input_device"]
     com_port = open_serial_port(config["com_port"])
