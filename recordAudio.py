@@ -20,7 +20,7 @@ def recorder(input_device_id, com_port, debug):
     AMPLITUDE_THRESHOLD = 300  # Sound detection threshold
     SILENCE_THRESHOLD = 5  # Silence duration to stop recording (seconds)
     CHUNK_SIZE = 4096  # Larger buffer size to reduce CPU load
-    CUT_SAMPLES = RATE * 5 * 2  # 5 seconds of audio to cut (2 bytes per sample)
+    CUT_SAMPLES = RATE * 4 * 2  # 5 seconds of audio to cut (2 bytes per sample)
 
     last_sound_time = None
     recording = False
