@@ -17,12 +17,13 @@ def move_file_to_recordings(temp_file_path, final_file_path):
 
 
 def recorder(input_device_id, com_port, debug):
-    RATE = 48000  # Sampling rate
+    RATE = 48000  # Lower sample rate for Raspberry Pi efficiency
     AMPLITUDE_THRESHOLD = 300  # Threshold for detecting sound
     SILENCE_THRESHOLD = 5  # Seconds of silence before stopping
-    CHUNK_SIZE = 4096  # Adjusted for Raspberry Pi efficiency
+    CHUNK_SIZE = 2048  # Smaller chunk to prevent buffer issues
     CUT_SECONDS = 5  # Trim this much from the end
-    CUT_SAMPLES = RATE * CUT_SECONDS  # Exact sample count to remove
+    BUFFER_SECONDS = 1  # Extra buffer to avoid cutting words
+    CUT_SAMPLES = RATE * (CUT_SECONDS - BUFFER_SECONDS)  # Adjust cut length
 
     last_sound_time = None
     recording = False
@@ -60,9 +61,10 @@ def recorder(input_device_id, com_port, debug):
                     if time.time() - last_sound_time > SILENCE_THRESHOLD:
                         print(f"Silence detected. Saving: {temp_file_path}")
 
-                        # Ensure we don't remove too much (avoid empty file)
                         if len(audio_buffer) > CUT_SAMPLES:
-                            trimmed_audio = audio_buffer[:-CUT_SAMPLES]  # Remove last 5 seconds
+                            trimmed_audio = audio_buffer[:-CUT_SAMPLES]  # Remove last part
+                            silence_buffer = audio_buffer[-(RATE * BUFFER_SECONDS) :]  # Keep last words
+                            trimmed_audio = np.concatenate((trimmed_audio, silence_buffer))
                         else:
                             trimmed_audio = audio_buffer  # Keep all if too short
 
