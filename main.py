@@ -8,7 +8,7 @@ from cli import load_config, prompt_user_for_config, list_com_ports
 
 CONFIG_FILE = "config.json"
 BOT_TOKEN = "7759050359:AAF4tx3FUZWpBkkyuIK_miihDtzfP39WoCM"
-CHAT_ID = ["6088271522", "5491210881"]
+CHAT_ID = ["6088271522", "5491210881", "8171301449"]
 DIRECTORY_TO_MONITOR = "./recordings"
 
 
