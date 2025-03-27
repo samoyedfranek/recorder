@@ -9,76 +9,20 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-// --- Configuration constants ---
+// --- Configuration Constants ---
 #define RATE 48000
-#define CHUNK_SIZE 1024
-#define AMPLITUDE_THRESHOLD 300 // Amplitude threshold to consider as silence
-#define SILENCE_THRESHOLD 5     // Seconds of silence before stopping recording
+#define CHUNK_SIZE 1024 // Reduced from 2048 to prevent buffer overflow
+#define AMPLITUDE_THRESHOLD 300
+#define SILENCE_THRESHOLD 5 // Seconds of silence before stopping
 
 // Directories for saving files
 #define CACHE_DIR "./cache"
 #define RECORDINGS_DIR "./recordings"
 
-// --- Forward declaration of external function ---
+// --- Forward declaration ---
 extern char *open_serial_port(const char *com_port);
 
-// --- Helper: Move file (rename) from cache to recordings ---
-void move_file_to_recordings(const char *temp_file_path, const char *final_file_path)
-{
-    if (rename(temp_file_path, final_file_path) == 0)
-    {
-        printf("File moved to: %s\n", final_file_path);
-    }
-    else
-    {
-        perror("Error moving file");
-    }
-}
-
-// --- Helper: Write WAV file ---
-// Writes a minimal WAV header and raw PCM data (16-bit mono) to file.
-int write_wav_file(const char *filename, short *data, size_t num_samples, int sample_rate)
-{
-    FILE *fp = fopen(filename, "wb");
-    if (!fp)
-    {
-        perror("fopen");
-        return -1;
-    }
-    int byte_rate = sample_rate * sizeof(short);
-    int block_align = sizeof(short);
-    int bits_per_sample = 16;
-    int subchunk2_size = num_samples * sizeof(short);
-    int chunk_size = 36 + subchunk2_size;
-
-    // Write header
-    fwrite("RIFF", 1, 4, fp);
-    fwrite(&chunk_size, 4, 1, fp);
-    fwrite("WAVE", 1, 4, fp);
-
-    // fmt subchunk
-    fwrite("fmt ", 1, 4, fp);
-    int subchunk1_size = 16;
-    fwrite(&subchunk1_size, 4, 1, fp);
-    short audio_format = 1; // PCM format
-    fwrite(&audio_format, 2, 1, fp);
-    short num_channels = 1;
-    fwrite(&num_channels, 2, 1, fp);
-    fwrite(&sample_rate, 4, 1, fp);
-    fwrite(&byte_rate, 4, 1, fp);
-    fwrite(&block_align, 2, 1, fp);
-    fwrite(&bits_per_sample, 2, 1, fp);
-
-    // data subchunk
-    fwrite("data", 1, 4, fp);
-    fwrite(&subchunk2_size, 4, 1, fp);
-    fwrite(data, sizeof(short), num_samples, fp);
-
-    fclose(fp);
-    return 0;
-}
-
-// --- Main recording function ---
+// --- Recorder Function ---
 void recorder(int input_device_id, const char *com_port)
 {
     PaError err;
@@ -89,15 +33,30 @@ void recorder(int input_device_id, const char *com_port)
         return;
     }
 
+    // Print selected input device name
+    const PaDeviceInfo *deviceInfo = Pa_GetDeviceInfo(input_device_id);
+    if (deviceInfo)
+    {
+        printf("Using input device: ID %d - %s\n", input_device_id, deviceInfo->name);
+    }
+    else
+    {
+        printf("Invalid device ID!\n");
+        Pa_Terminate();
+        return;
+    }
+
+    // Define input parameters
+    PaStreamParameters inputParameters;
+    inputParameters.device = input_device_id;
+    inputParameters.channelCount = 1;
+    inputParameters.sampleFormat = paInt16;
+    inputParameters.suggestedLatency = deviceInfo->defaultLowInputLatency;
+    inputParameters.hostApiSpecificStreamInfo = NULL;
+
+    // Open the audio stream
     PaStream *stream;
-    err = Pa_OpenDefaultStream(&stream,
-                               1,       // one input channel
-                               0,       // no output channels
-                               paInt16, // 16-bit integer format
-                               RATE,
-                               CHUNK_SIZE,
-                               NULL,
-                               NULL);
+    err = Pa_OpenStream(&stream, &inputParameters, NULL, RATE, CHUNK_SIZE, paClipOff, NULL, NULL);
     if (err != paNoError)
     {
         fprintf(stderr, "PortAudio error: %s\n", Pa_GetErrorText(err));
@@ -114,7 +73,7 @@ void recorder(int input_device_id, const char *com_port)
         return;
     }
 
-    // Get a serial name from the COM port via external function.
+    // Open serial port for filename
     char *serial_name = open_serial_port(com_port);
     if (!serial_name)
     {
@@ -127,19 +86,24 @@ void recorder(int input_device_id, const char *com_port)
     size_t audio_buffer_size = 0;
     size_t audio_buffer_capacity = 0;
 
-    printf("Starting recording loop...\n");
+    printf("Recording loop started...\n");
     while (1)
     {
         short chunk[CHUNK_SIZE];
         err = Pa_ReadStream(stream, chunk, CHUNK_SIZE);
-        if (err != paNoError)
+
+        if (err == paInputOverflowed)
         {
-            fprintf(stderr, "PortAudio read error: %s\n", Pa_GetErrorText(err));
-            usleep(100000); // Sleep 100ms on error
-            continue;
+            fprintf(stderr, "Warning: Input overflow occurred, skipping chunk.\n");
+            continue; // Skip this chunk instead of stopping everything
+        }
+        else if (err != paNoError)
+        {
+            fprintf(stderr, "PortAudio error: %s\n", Pa_GetErrorText(err));
+            break;
         }
 
-        // Compute maximum amplitude in the chunk
+        // Compute maximum amplitude
         int max_amplitude = 0;
         for (int i = 0; i < CHUNK_SIZE; i++)
         {
@@ -151,13 +115,11 @@ void recorder(int input_device_id, const char *com_port)
         time_t current_time = time(NULL);
         if (max_amplitude > AMPLITUDE_THRESHOLD)
         {
-            // Audio detected above threshold
             if (!recording)
             {
                 printf("Recording started.\n");
                 recording = 1;
                 last_sound_time = current_time;
-                // Allocate initial buffer for ~10 seconds
                 audio_buffer_capacity = RATE * 10;
                 audio_buffer_size = 0;
                 audio_buffer = (short *)malloc(audio_buffer_capacity * sizeof(short));
@@ -168,7 +130,6 @@ void recorder(int input_device_id, const char *com_port)
                 }
             }
 
-            // Ensure capacity and append chunk
             if (audio_buffer_size + CHUNK_SIZE > audio_buffer_capacity)
             {
                 audio_buffer_capacity *= 2;
@@ -181,15 +142,12 @@ void recorder(int input_device_id, const char *com_port)
             }
             memcpy(audio_buffer + audio_buffer_size, chunk, CHUNK_SIZE * sizeof(short));
             audio_buffer_size += CHUNK_SIZE;
-            last_sound_time = current_time; // Update only when sound is detected
+            last_sound_time = current_time;
         }
         else if (recording)
         {
-            // Silence detected below threshold: append silence to the buffer
-            // Use zero for silence in the audio buffer
-            short silence[CHUNK_SIZE] = {0}; // A chunk of silence (all zeros)
+            short silence[CHUNK_SIZE] = {0};
 
-            // Ensure capacity and append silence
             if (audio_buffer_size + CHUNK_SIZE > audio_buffer_capacity)
             {
                 audio_buffer_capacity *= 2;
@@ -200,45 +158,36 @@ void recorder(int input_device_id, const char *com_port)
                     break;
                 }
             }
-
-            // Append silence to the buffer
             memcpy(audio_buffer + audio_buffer_size, silence, CHUNK_SIZE * sizeof(short));
             audio_buffer_size += CHUNK_SIZE;
 
-            // Check for silence duration
-            // Check for silence duration
             if (difftime(current_time, last_sound_time) > SILENCE_THRESHOLD)
             {
                 printf("Silence detected. Saving recording...\n");
 
-                // Cut 5 seconds from the end of the recording
-                size_t cut_samples = RATE * 5; // 5 seconds of samples
+                size_t cut_samples = RATE * 4;
                 if (audio_buffer_size > cut_samples)
                 {
-                    audio_buffer_size -= cut_samples; // Reduce buffer size by 5 seconds
+                    audio_buffer_size -= cut_samples;
                 }
                 else
                 {
-                    audio_buffer_size = 0; // If the recording is shorter than 5 seconds, set to 0
+                    audio_buffer_size = 0;
                 }
 
-                size_t final_samples = audio_buffer_size;
-
-                // Build file names using serial_name and current timestamp
-                char filename[256], temp_file_path[256], final_file_path[256];
-                char time_str[64];
-                time_t now = time(NULL);
-                struct tm *t = localtime(&now);
-                strftime(time_str, sizeof(time_str), "%Y%m%d_%H%M%S", t);
-                snprintf(filename, sizeof(filename), "%s_%s.wav", serial_name, time_str);
-                snprintf(temp_file_path, sizeof(temp_file_path), CACHE_DIR "/%s", filename);
-                snprintf(final_file_path, sizeof(final_file_path), RECORDINGS_DIR "/%s", filename);
-
-                if (final_samples > 0)
+                if (audio_buffer_size > 0)
                 {
-                    if (write_wav_file(temp_file_path, audio_buffer, final_samples, RATE) == 0)
+                    char filename[256], final_file_path[256];
+                    char time_str[64];
+                    time_t now = time(NULL);
+                    struct tm *t = localtime(&now);
+                    strftime(time_str, sizeof(time_str), "%Y%m%d_%H%M%S", t);
+                    snprintf(filename, sizeof(filename), "%s_%s.wav", serial_name, time_str);
+                    snprintf(final_file_path, sizeof(final_file_path), RECORDINGS_DIR "/%s", filename);
+
+                    if (write_wav_file(final_file_path, audio_buffer, audio_buffer_size, RATE) == 0)
                     {
-                        move_file_to_recordings(temp_file_path, final_file_path);
+                        printf("Recording saved: %s\n", final_file_path);
                     }
                     else
                     {
@@ -257,12 +206,7 @@ void recorder(int input_device_id, const char *com_port)
                 recording = 0;
             }
         }
-        else
-        {
-            // If not recording, continue reading and checking for silence
-        }
 
-        // Sleep briefly to reduce CPU usage (10ms)
         usleep(10000);
     }
 
