@@ -1,6 +1,3 @@
-token.json
-credentials.json
-config.json
-__pycache__
-recordings
-cache
+.vscode/*
+old_version
+recorder.exe
