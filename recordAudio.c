@@ -89,13 +89,33 @@ void recorder(int input_device_id, const char *com_port)
         return;
     }
 
+    // Validate input device ID
+    int device_count = Pa_GetDeviceCount();
+    if (input_device_id < 0 || input_device_id >= device_count)
+    {
+        fprintf(stderr, "Invalid input device ID: %d\n", input_device_id);
+        Pa_Terminate();
+        return;
+    }
+
+    const PaDeviceInfo *deviceInfo = Pa_GetDeviceInfo(input_device_id);
+    if (deviceInfo == NULL)
+    {
+        fprintf(stderr, "Failed to get device info for device ID: %d\n", input_device_id);
+        Pa_Terminate();
+        return;
+    }
+
+    // Log the device name
+    printf("Using input device: %s (ID: %d)\n", deviceInfo->name, input_device_id);
+
     // Define the input parameters
     PaStreamParameters inputParameters;
     memset(&inputParameters, 0, sizeof(inputParameters));
-    inputParameters.device = input_device_id; // Use the specified input device
-    inputParameters.channelCount = 1;         // Mono input
-    inputParameters.sampleFormat = paInt16;   // 16-bit integer format
-    inputParameters.suggestedLatency = Pa_GetDeviceInfo(input_device_id)->defaultLowInputLatency;
+    inputParameters.device = input_device_id;
+    inputParameters.channelCount = 1;       // Mono input
+    inputParameters.sampleFormat = paInt16; // 16-bit integer format
+    inputParameters.suggestedLatency = deviceInfo->defaultLowInputLatency;
     inputParameters.hostApiSpecificStreamInfo = NULL;
 
     PaStream *stream;
@@ -221,7 +241,7 @@ void recorder(int input_device_id, const char *com_port)
                 printf("Silence detected. Saving recording...\n");
 
                 // Cut 5 seconds from the end of the recording
-                size_t cut_samples = RATE * 4; // 5 seconds of samples
+                size_t cut_samples = RATE * 5; // 5 seconds of samples
                 if (audio_buffer_size > cut_samples)
                 {
                     audio_buffer_size -= cut_samples; // Reduce buffer size by 5 seconds
