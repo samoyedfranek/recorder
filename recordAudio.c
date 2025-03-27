@@ -89,15 +89,24 @@ void recorder(int input_device_id, const char *com_port)
         return;
     }
 
+    // Define the input parameters
+    PaStreamParameters inputParameters;
+    memset(&inputParameters, 0, sizeof(inputParameters));
+    inputParameters.device = input_device_id; // Use the specified input device
+    inputParameters.channelCount = 1;         // Mono input
+    inputParameters.sampleFormat = paInt16;   // 16-bit integer format
+    inputParameters.suggestedLatency = Pa_GetDeviceInfo(input_device_id)->defaultLowInputLatency;
+    inputParameters.hostApiSpecificStreamInfo = NULL;
+
     PaStream *stream;
-    err = Pa_OpenDefaultStream(&stream,
-                               1,       // one input channel
-                               0,       // no output channels
-                               paInt16, // 16-bit integer format
-                               RATE,
-                               CHUNK_SIZE,
-                               NULL,
-                               NULL);
+    err = Pa_OpenStream(&stream,
+                        &inputParameters,
+                        NULL, // No output parameters
+                        RATE,
+                        CHUNK_SIZE,
+                        paClipOff, // No clipping
+                        NULL,
+                        NULL);
     if (err != paNoError)
     {
         fprintf(stderr, "PortAudio error: %s\n", Pa_GetErrorText(err));
