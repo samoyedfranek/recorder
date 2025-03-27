@@ -12,19 +12,14 @@
 // --- Configuration constants ---
 #define RATE 48000
 #define CHUNK_SIZE 2048
-#define AMPLITUDE_THRESHOLD 300 // Amplitude threshold to start recording
+#define AMPLITUDE_THRESHOLD 300 // Amplitude threshold to consider as silence
 #define SILENCE_THRESHOLD 5     // Seconds of silence before stopping recording
-#define CUT_SECONDS 5           // Seconds to trim from the end (if desired)
-#define BUFFER_SECONDS 1        // Extra seconds to keep (avoid cutting words)
-#define CUT_SAMPLES (RATE * (CUT_SECONDS - BUFFER_SECONDS))
 
 // Directories for saving files
 #define CACHE_DIR "./cache"
 #define RECORDINGS_DIR "./recordings"
 
 // --- Forward declaration of external function ---
-// This function should be implemented in your serialReader module.
-// For now, you can provide a stub that returns a static string.
 extern char *open_serial_port(const char *com_port);
 
 // --- Helper: Move file (rename) from cache to recordings ---
@@ -82,6 +77,7 @@ int write_wav_file(const char *filename, short *data, size_t num_samples, int sa
     fclose(fp);
     return 0;
 }
+
 // --- Main recording function ---
 void recorder(int input_device_id, const char *com_port)
 {
@@ -155,6 +151,7 @@ void recorder(int input_device_id, const char *com_port)
         time_t current_time = time(NULL);
         if (max_amplitude > AMPLITUDE_THRESHOLD)
         {
+            // Audio detected above threshold
             if (!recording)
             {
                 printf("Recording started.\n");
@@ -170,6 +167,7 @@ void recorder(int input_device_id, const char *com_port)
                     break;
                 }
             }
+
             // Ensure capacity and append chunk
             if (audio_buffer_size + CHUNK_SIZE > audio_buffer_capacity)
             {
@@ -183,19 +181,48 @@ void recorder(int input_device_id, const char *com_port)
             }
             memcpy(audio_buffer + audio_buffer_size, chunk, CHUNK_SIZE * sizeof(short));
             audio_buffer_size += CHUNK_SIZE;
-            last_sound_time = current_time;
+            last_sound_time = current_time; // Update only when sound is detected
         }
         else if (recording)
         {
-            // Check if silence has persisted long enough to end recording
+            // Silence detected below threshold: append silence to the buffer
+            // Use zero for silence in the audio buffer
+            short silence[CHUNK_SIZE] = {0}; // A chunk of silence (all zeros)
+
+            // Ensure capacity and append silence
+            if (audio_buffer_size + CHUNK_SIZE > audio_buffer_capacity)
+            {
+                audio_buffer_capacity *= 2;
+                audio_buffer = realloc(audio_buffer, audio_buffer_capacity * sizeof(short));
+                if (!audio_buffer)
+                {
+                    fprintf(stderr, "Memory reallocation failed\n");
+                    break;
+                }
+            }
+
+            // Append silence to the buffer
+            memcpy(audio_buffer + audio_buffer_size, silence, CHUNK_SIZE * sizeof(short));
+            audio_buffer_size += CHUNK_SIZE;
+
+            // Check for silence duration
+            // Check for silence duration
             if (difftime(current_time, last_sound_time) > SILENCE_THRESHOLD)
             {
                 printf("Silence detected. Saving recording...\n");
-                size_t final_samples = audio_buffer_size;
-                if (audio_buffer_size > CUT_SAMPLES)
+
+                // Cut 5 seconds from the end of the recording
+                size_t cut_samples = RATE * 4; // 5 seconds of samples
+                if (audio_buffer_size > cut_samples)
                 {
-                    final_samples = audio_buffer_size - CUT_SAMPLES;
+                    audio_buffer_size -= cut_samples; // Reduce buffer size by 5 seconds
                 }
+                else
+                {
+                    audio_buffer_size = 0; // If the recording is shorter than 5 seconds, set to 0
+                }
+
+                size_t final_samples = audio_buffer_size;
 
                 // Build file names using serial_name and current timestamp
                 char filename[256], temp_file_path[256], final_file_path[256];
@@ -206,9 +233,6 @@ void recorder(int input_device_id, const char *com_port)
                 snprintf(filename, sizeof(filename), "%s_%s.wav", serial_name, time_str);
                 snprintf(temp_file_path, sizeof(temp_file_path), CACHE_DIR "/%s", filename);
                 snprintf(final_file_path, sizeof(final_file_path), RECORDINGS_DIR "/%s", filename);
-
-                printf("Temp file path: %s\n", temp_file_path);   // Debug output
-                printf("Final file path: %s\n", final_file_path); // Debug output
 
                 if (final_samples > 0)
                 {
@@ -232,6 +256,10 @@ void recorder(int input_device_id, const char *com_port)
                 audio_buffer_capacity = 0;
                 recording = 0;
             }
+        }
+        else
+        {
+            // If not recording, continue reading and checking for silence
         }
 
         // Sleep briefly to reduce CPU usage (10ms)
