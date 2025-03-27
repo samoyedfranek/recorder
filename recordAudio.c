@@ -11,7 +11,7 @@
 
 // --- Configuration constants ---
 #define RATE 48000
-#define CHUNK_SIZE 2048
+#define CHUNK_SIZE 1024
 #define AMPLITUDE_THRESHOLD 300 // Amplitude threshold to consider as silence
 #define SILENCE_THRESHOLD 5     // Seconds of silence before stopping recording
 
