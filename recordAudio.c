@@ -1,4 +1,6 @@
 #include "h/recordAudio.h"
+#include "h/write_wav_file.h"
+#include "h/open_serial_port.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
