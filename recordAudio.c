@@ -89,44 +89,15 @@ void recorder(int input_device_id, const char *com_port)
         return;
     }
 
-    // Validate input device ID
-    int device_count = Pa_GetDeviceCount();
-    if (input_device_id < 0 || input_device_id >= device_count)
-    {
-        fprintf(stderr, "Invalid input device ID: %d\n", input_device_id);
-        Pa_Terminate();
-        return;
-    }
-
-    const PaDeviceInfo *deviceInfo = Pa_GetDeviceInfo(input_device_id);
-    if (deviceInfo == NULL)
-    {
-        fprintf(stderr, "Failed to get device info for device ID: %d\n", input_device_id);
-        Pa_Terminate();
-        return;
-    }
-
-    // Log the device name
-    printf("Using input device: %s (ID: %d)\n", deviceInfo->name, input_device_id);
-
-    // Define the input parameters
-    PaStreamParameters inputParameters;
-    memset(&inputParameters, 0, sizeof(inputParameters));
-    inputParameters.device = input_device_id;
-    inputParameters.channelCount = 1;       // Mono input
-    inputParameters.sampleFormat = paInt16; // 16-bit integer format
-    inputParameters.suggestedLatency = deviceInfo->defaultLowInputLatency;
-    inputParameters.hostApiSpecificStreamInfo = NULL;
-
     PaStream *stream;
-    err = Pa_OpenStream(&stream,
-                        &inputParameters,
-                        NULL, // No output parameters
-                        RATE,
-                        CHUNK_SIZE,
-                        paClipOff, // No clipping
-                        NULL,
-                        NULL);
+    err = Pa_OpenDefaultStream(&stream,
+                               1,       // one input channel
+                               0,       // no output channels
+                               paInt16, // 16-bit integer format
+                               RATE,
+                               CHUNK_SIZE,
+                               NULL,
+                               NULL);
     if (err != paNoError)
     {
         fprintf(stderr, "PortAudio error: %s\n", Pa_GetErrorText(err));
