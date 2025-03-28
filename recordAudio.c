@@ -1,19 +1,17 @@
-#include "h/recordAudio.h"
-#include "h/write_wav_file.h"
-#include "h/open_serial_port.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
 #include <time.h>
 #include <unistd.h>
-#include <portaudio.h>
-#include <sys/stat.h>
-#include <sys/types.h>
+#include <alsa/asoundlib.h>
 
 // --- Configuration Constants ---
+#define PCM_DEVICE "hw:1,0" // Use the appropriate device name
 #define RATE 48000
-#define CHUNK_SIZE 1024 // Reduced from 2048 to prevent buffer overflow
+#define CHANNELS 1
+#define SAMPLE_SIZE 2   // 16-bit samples (2 bytes per sample)
+#define CHUNK_SIZE 1024 // Number of frames to capture per read
 #define AMPLITUDE_THRESHOLD 300
 #define SILENCE_THRESHOLD 5 // Seconds of silence before stopping
 
@@ -25,53 +23,48 @@
 extern char *open_serial_port(const char *com_port);
 
 // --- Recorder Function ---
-void recorder(int input_device_id, const char *com_port)
+void recorder(const char *com_port)
 {
-    PaError err;
-    err = Pa_Initialize();
-    if (err != paNoError)
+    snd_pcm_t *pcm_handle;
+    snd_pcm_hw_params_t *params;
+    unsigned int rate = RATE;
+    int dir;
+    short *audio_buffer;
+    int frames;
+    int recording = 0;
+    time_t last_sound_time = 0;
+    size_t audio_buffer_size = 0;
+    size_t audio_buffer_capacity = 0;
+
+    // Open the PCM device for capture
+    if (snd_pcm_open(&pcm_handle, PCM_DEVICE, SND_PCM_STREAM_CAPTURE, 0) < 0)
     {
-        fprintf(stderr, "PortAudio error: %s\n", Pa_GetErrorText(err));
+        fprintf(stderr, "Error opening PCM device %s\n", PCM_DEVICE);
         return;
     }
 
-    // Print selected input device name
-    const PaDeviceInfo *deviceInfo = Pa_GetDeviceInfo(input_device_id);
-    if (deviceInfo)
+    // Allocate hardware parameters structure
+    snd_pcm_hw_params_malloc(&params);
+
+    // Set default hardware parameters
+    snd_pcm_hw_params_any(pcm_handle, params);
+    snd_pcm_hw_params_set_access(pcm_handle, params, SND_PCM_ACCESS_RW_INTERLEAVED);
+    snd_pcm_hw_params_set_format(pcm_handle, params, SND_PCM_FORMAT_S16_LE);
+    snd_pcm_hw_params_set_channels(pcm_handle, params, CHANNELS);
+    snd_pcm_hw_params_set_rate_near(pcm_handle, params, &rate, &dir);
+
+    // Apply the hardware parameters
+    if (snd_pcm_hw_params(pcm_handle, params) < 0)
     {
-        printf("Using input device: ID %d - %s\n", input_device_id, deviceInfo->name);
-    }
-    else
-    {
-        printf("Invalid device ID!\n");
-        Pa_Terminate();
+        fprintf(stderr, "Error setting PCM parameters\n");
         return;
     }
 
-    // Define input parameters
-    PaStreamParameters inputParameters;
-    inputParameters.device = input_device_id;
-    inputParameters.channelCount = 1;
-    inputParameters.sampleFormat = paInt16;
-    inputParameters.suggestedLatency = deviceInfo->defaultLowInputLatency;
-    inputParameters.hostApiSpecificStreamInfo = NULL;
-
-    // Open the audio stream
-    PaStream *stream;
-    err = Pa_OpenStream(&stream, &inputParameters, NULL, RATE, CHUNK_SIZE, paClipOff, NULL, NULL);
-    if (err != paNoError)
+    // Allocate a buffer to hold the audio data
+    audio_buffer = (short *)malloc(CHUNK_SIZE * sizeof(short));
+    if (!audio_buffer)
     {
-        fprintf(stderr, "PortAudio error: %s\n", Pa_GetErrorText(err));
-        Pa_Terminate();
-        return;
-    }
-
-    err = Pa_StartStream(stream);
-    if (err != paNoError)
-    {
-        fprintf(stderr, "PortAudio error: %s\n", Pa_GetErrorText(err));
-        Pa_CloseStream(stream);
-        Pa_Terminate();
+        fprintf(stderr, "Error allocating buffer\n");
         return;
     }
 
@@ -82,38 +75,27 @@ void recorder(int input_device_id, const char *com_port)
         serial_name = "unknown";
     }
 
-    int recording = 0;
-    time_t last_sound_time = 0;
-    short *audio_buffer = NULL;
-    size_t audio_buffer_size = 0;
-    size_t audio_buffer_capacity = 0;
-
     printf("Recording loop started...\n");
     while (1)
     {
-        short chunk[CHUNK_SIZE];
-        err = Pa_ReadStream(stream, chunk, CHUNK_SIZE);
-
-        if (err == paInputOverflowed)
+        // Capture audio data from PCM device
+        frames = snd_pcm_readi(pcm_handle, audio_buffer, CHUNK_SIZE);
+        if (frames < 0)
         {
-            fprintf(stderr, "Warning: Input overflow occurred, skipping chunk.\n");
-            continue; // Skip this chunk instead of stopping everything
-        }
-        else if (err != paNoError)
-        {
-            fprintf(stderr, "PortAudio error: %s\n", Pa_GetErrorText(err));
+            fprintf(stderr, "Error reading from PCM device: %s\n", snd_strerror(frames));
             break;
         }
 
-        // Compute maximum amplitude
+        // Compute the maximum amplitude of the captured chunk
         int max_amplitude = 0;
-        for (int i = 0; i < CHUNK_SIZE; i++)
+        for (int i = 0; i < frames; i++)
         {
-            int sample = abs(chunk[i]);
+            int sample = abs(audio_buffer[i]);
             if (sample > max_amplitude)
                 max_amplitude = sample;
         }
 
+        // Check if the amplitude exceeds the threshold to start or continue recording
         time_t current_time = time(NULL);
         if (max_amplitude > AMPLITUDE_THRESHOLD)
         {
@@ -124,7 +106,7 @@ void recorder(int input_device_id, const char *com_port)
                 last_sound_time = current_time;
                 audio_buffer_capacity = RATE * 10;
                 audio_buffer_size = 0;
-                audio_buffer = (short *)malloc(audio_buffer_capacity * sizeof(short));
+                audio_buffer = (short *)realloc(audio_buffer, audio_buffer_capacity * sizeof(short));
                 if (!audio_buffer)
                 {
                     fprintf(stderr, "Memory allocation failed\n");
@@ -132,7 +114,8 @@ void recorder(int input_device_id, const char *com_port)
                 }
             }
 
-            if (audio_buffer_size + CHUNK_SIZE > audio_buffer_capacity)
+            // Add the captured chunk to the audio buffer
+            if (audio_buffer_size + frames > audio_buffer_capacity)
             {
                 audio_buffer_capacity *= 2;
                 audio_buffer = realloc(audio_buffer, audio_buffer_capacity * sizeof(short));
@@ -142,15 +125,15 @@ void recorder(int input_device_id, const char *com_port)
                     break;
                 }
             }
-            memcpy(audio_buffer + audio_buffer_size, chunk, CHUNK_SIZE * sizeof(short));
-            audio_buffer_size += CHUNK_SIZE;
+            memcpy(audio_buffer + audio_buffer_size, audio_buffer, frames * sizeof(short));
+            audio_buffer_size += frames;
             last_sound_time = current_time;
         }
         else if (recording)
         {
+            // Add silence to the buffer if recording and no sound detected
             short silence[CHUNK_SIZE] = {0};
-
-            if (audio_buffer_size + CHUNK_SIZE > audio_buffer_capacity)
+            if (audio_buffer_size + frames > audio_buffer_capacity)
             {
                 audio_buffer_capacity *= 2;
                 audio_buffer = realloc(audio_buffer, audio_buffer_capacity * sizeof(short));
@@ -160,14 +143,15 @@ void recorder(int input_device_id, const char *com_port)
                     break;
                 }
             }
-            memcpy(audio_buffer + audio_buffer_size, silence, CHUNK_SIZE * sizeof(short));
-            audio_buffer_size += CHUNK_SIZE;
+            memcpy(audio_buffer + audio_buffer_size, silence, frames * sizeof(short));
+            audio_buffer_size += frames;
 
+            // Check for silence threshold to stop recording
             if (difftime(current_time, last_sound_time) > SILENCE_THRESHOLD)
             {
                 printf("Silence detected. Saving recording...\n");
 
-                size_t cut_samples = RATE * 4;
+                size_t cut_samples = RATE * 4; // Cut the last 4 seconds of audio
                 if (audio_buffer_size > cut_samples)
                 {
                     audio_buffer_size -= cut_samples;
@@ -177,6 +161,7 @@ void recorder(int input_device_id, const char *com_port)
                     audio_buffer_size = 0;
                 }
 
+                // Save the recording to a file
                 if (audio_buffer_size > 0)
                 {
                     char filename[256], final_file_path[256];
@@ -187,6 +172,7 @@ void recorder(int input_device_id, const char *com_port)
                     snprintf(filename, sizeof(filename), "%s_%s.wav", serial_name, time_str);
                     snprintf(final_file_path, sizeof(final_file_path), RECORDINGS_DIR "/%s", filename);
 
+                    // Assuming write_wav_file function is available to write the WAV file
                     if (write_wav_file(final_file_path, audio_buffer, audio_buffer_size, RATE) == 0)
                     {
                         printf("Recording saved: %s\n", final_file_path);
@@ -209,10 +195,10 @@ void recorder(int input_device_id, const char *com_port)
             }
         }
 
-        usleep(10000);
+        usleep(10000); // Small delay to prevent CPU overload
     }
 
-    Pa_StopStream(stream);
-    Pa_CloseStream(stream);
-    Pa_Terminate();
+    // Cleanup
+    snd_pcm_close(pcm_handle);
+    free(audio_buffer);
 }
