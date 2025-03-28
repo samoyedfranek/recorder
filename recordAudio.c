@@ -5,6 +5,8 @@
 #include <time.h>
 #include <unistd.h>
 #include <alsa/asoundlib.h>
+#include <h/write_wav_file.h>
+#include <h/open_serial_port.h>
 
 // --- Configuration Constants ---
 #define PCM_DEVICE "hw:1,0" // Use the appropriate device name
