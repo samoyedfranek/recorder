@@ -8,18 +8,7 @@
 #include <unistd.h>
 #include "h/telegramSend.h"
 #include "h/recordAudio.h"
-#include "h/config.h"
-#include "h/globals.h"
-
-volatile sig_atomic_t keepRunning = 1;
-
-// Signal handler
-void handle_signal(int sig)
-{
-    keepRunning = 0;
-    printf("Signal %d received, shutting down...\n", sig);
-    fflush(stdout);
-}
+#include "h/config.h" // Include the config header
 
 // Function to send file to Telegram
 void send_existing_files(const char *directory)
@@ -128,28 +117,25 @@ void *recorder_thread(void *arg)
     return NULL;
 }
 
+// Main function
 int main(void)
 {
     // Load configuration from .env file
     load_config(".env");
-
-    // Setup signal handlers for SIGINT and SIGTERM
-    signal(SIGINT, handle_signal);
-    signal(SIGTERM, handle_signal);
 
     pthread_t recorder_thread_id, monitor_thread_id;
 
     // Send any existing files before monitoring starts
     send_existing_files(RECORDING_DIRECTORY);
 
-    // Create a thread for the recorder, passing COM_PORT as argument
-    if (pthread_create(&recorder_thread_id, NULL, (void *(*)(void *))recorder, (void *)COM_PORT) != 0)
+    // Create a thread for the recorder
+    if (pthread_create(&recorder_thread_id, NULL, recorder_thread, NULL) != 0)
     {
         perror("Failed to create recorder thread");
         return 1;
     }
 
-    // Create a thread for directory monitoring, passing RECORDING_DIRECTORY as argument
+    // Create a thread for directory monitoring
     if (pthread_create(&monitor_thread_id, NULL, (void *(*)(void *))monitor_directory, (void *)RECORDING_DIRECTORY) != 0)
     {
         perror("Failed to create monitor thread");
@@ -161,6 +147,5 @@ int main(void)
     pthread_join(monitor_thread_id, NULL);
 
     printf("All files processed successfully.\n");
-    fflush(stdout);
     return 0;
 }
