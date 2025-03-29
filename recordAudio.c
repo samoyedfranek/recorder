@@ -5,6 +5,8 @@
 #include <time.h>
 #include <unistd.h>
 #include <portaudio.h>
+#include "h/open_serial_port.h"
+#include "h/write_wav_file.h"
 
 #define SAMPLE_RATE 48000
 #define CHANNELS 1
