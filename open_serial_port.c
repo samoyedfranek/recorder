@@ -112,15 +112,12 @@ static void remove_endings(char *str)
 
 char *open_serial_port(const char *com_port)
 {
-<<<<<<< HEAD
-=======
     if (com_port == NULL || strlen(com_port) == 0)
     {
         fprintf(stderr, "Error: Invalid port name\n");
         return duplicate_string("radio");
     }
 
->>>>>>> parent of b0d1a2f (fix comport)
     struct sp_port *port;
     enum sp_return ret;
 
