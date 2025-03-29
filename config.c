@@ -6,6 +6,7 @@
 char *BOT_TOKEN = NULL;
 char *COM_PORT = NULL;
 char *RECORDING_DIRECTORY = NULL;
+int AUDIO_INPUT_DEVICE = 0;
 char **CHAT_IDS = NULL;
 
 void load_config(const char *env_file)
@@ -69,6 +70,8 @@ void load_config(const char *env_file)
                 COM_PORT = strdup(value);
             else if (strcmp(key, "RECORDING_DIRECTORY") == 0)
                 RECORDING_DIRECTORY = strdup(value);
+            else if (strcmp(key, "AUDIO_INPUT_DEVICE") == 0)
+                AUDIO_INPUT_DEVICE = atoi(value);
         }
     }
 
