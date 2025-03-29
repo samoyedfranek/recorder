@@ -58,93 +58,35 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
     }
     printf("Frames captured: %lu, Max amplitude: %d\n", framesPerBuffer, max_amplitude);
 
-    // Check if recording should start
-    time_t current_time = time(NULL);
-    if (max_amplitude > AMPLITUDE_THRESHOLD)
+    // Ensure buffer allocation before recording
+    if (!data->buffer)
     {
-        if (!data->recording)
+        data->capacity = SAMPLE_RATE * 60; // Allocate space for at least 1 minute
+        data->size = 0;
+        data->buffer = (short *)malloc(data->capacity * sizeof(short));
+        if (!data->buffer)
         {
-            printf("Recording started.\n");
-            data->recording = 1;
-            data->last_sound_time = current_time;
-            data->capacity = SAMPLE_RATE * 10;
-            data->size = 0;
-            data->buffer = (short *)malloc(data->capacity * sizeof(short));
-            if (!data->buffer)
-            {
-                fprintf(stderr, "Memory allocation failed!\n");
-                return paAbort;
-            }
-        }
-
-        // Store audio data
-        if (data->size + framesPerBuffer > data->capacity)
-        {
-            data->capacity *= 2;
-            data->buffer = realloc(data->buffer, data->capacity * sizeof(short));
-            if (!data->buffer)
-            {
-                fprintf(stderr, "Memory reallocation failed!\n");
-                return paAbort;
-            }
-        }
-        memcpy(data->buffer + data->size, input, framesPerBuffer * sizeof(short));
-        data->size += framesPerBuffer;
-        printf("Buffer size: %zu\n", data->size);
-
-        data->last_sound_time = current_time;
-    }
-    else if (data->recording)
-    {
-        // Check for silence threshold to stop recording
-        if (difftime(current_time, data->last_sound_time) > SILENCE_THRESHOLD)
-        {
-            printf("Silence detected. Saving recording...\n");
-
-            // Trim last 4 seconds (optional)
-            size_t cut_samples = SAMPLE_RATE * 4;
-            if (data->size > cut_samples)
-            {
-                data->size -= cut_samples;
-            }
-            else
-            {
-                data->size = 0;
-            }
-
-            // Save the recording to a file
-            if (data->size > 0)
-            {
-                char filename[256], final_file_path[256];
-                char time_str[64];
-                time_t now = time(NULL);
-                struct tm *t = localtime(&now);
-                strftime(time_str, sizeof(time_str), "%Y%m%d_%H%M%S", t);
-                snprintf(filename, sizeof(filename), "%s_%s.wav", data->serial_name, time_str);
-                snprintf(final_file_path, sizeof(final_file_path), RECORDINGS_DIR "/%s", filename);
-
-                // Save to WAV file
-                if (write_wav_file(final_file_path, data->buffer, data->size, SAMPLE_RATE) == 0)
-                {
-                    printf("Recording saved: %s\n", final_file_path);
-                }
-                else
-                {
-                    fprintf(stderr, "Failed to write WAV file.\n");
-                }
-            }
-            else
-            {
-                printf("Recording too short, skipping save.\n");
-            }
-
-            free(data->buffer);
-            data->buffer = NULL;
-            data->size = 0;
-            data->capacity = 0;
-            data->recording = 0;
+            fprintf(stderr, "Memory allocation failed!\n");
+            return paAbort;
         }
     }
+
+    // Expand buffer if needed
+    if (data->size + framesPerBuffer > data->capacity)
+    {
+        data->capacity *= 2;
+        data->buffer = realloc(data->buffer, data->capacity * sizeof(short));
+        if (!data->buffer)
+        {
+            fprintf(stderr, "Memory reallocation failed!\n");
+            return paAbort;
+        }
+    }
+
+    // Store audio data regardless of silence
+    memcpy(data->buffer + data->size, input, framesPerBuffer * sizeof(short));
+    data->size += framesPerBuffer;
+    printf("Buffer size: %zu\n", data->size);
 
     return paContinue;
 }
