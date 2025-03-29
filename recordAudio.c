@@ -161,6 +161,7 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
     return paContinue;
 }
 
+// --- Recorder Function ---
 void recorder(const char *com_port)
 {
     PaError err;
@@ -199,13 +200,10 @@ void recorder(const char *com_port)
         return;
     }
 
-    printf("Recording started...\n");
+    printf("Recording loop started... Press Enter to stop.\n");
 
-    // Run until the recording is finished (automatically stopping based on silence threshold)
-    while (data.recording)
-    {
-        usleep(100000); // Sleep for 100ms to reduce CPU usage
-    }
+    // Wait for user input to stop recording
+    getchar();
 
     // Stop recording
     err = Pa_StopStream(stream);
@@ -217,6 +215,4 @@ void recorder(const char *com_port)
     {
         free(data.buffer);
     }
-
-    printf("Recording stopped.\n");
 }
