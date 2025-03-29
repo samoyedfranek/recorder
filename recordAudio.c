@@ -56,6 +56,7 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
             max_amplitude = sample;
         }
     }
+
     printf("Frames captured: %lu, Max amplitude: %d\n", framesPerBuffer, max_amplitude);
 
     time_t current_time = time(NULL);
@@ -99,10 +100,16 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
             data->last_sound_time = current_time;
         }
 
+        // If no sound is detected, check for silence detection
+        if (max_amplitude <= AMPLITUDE_THRESHOLD)
+        {
+            printf("Silence detected: Max amplitude below threshold\n");
+        }
+
         // Stop recording if silence lasts too long
         if (difftime(current_time, data->last_sound_time) > SILENCE_THRESHOLD)
         {
-            printf("Silence detected. Stopping recording...\n");
+            printf("Silence detected for too long. Stopping recording...\n");
 
             // Save the recording
             if (data->size > 0)
