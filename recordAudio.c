@@ -48,6 +48,7 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
 
     // Compute maximum amplitude in the chunk
     int max_amplitude = 0;
+    printf("Frames captured: %lu, Max amplitude: %d\n", framesPerBuffer, max_amplitude);
     for (unsigned int i = 0; i < framesPerBuffer; i++)
     {
         int sample = abs(input[i]);
@@ -89,6 +90,8 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
         }
         memcpy(data->buffer + data->size, input, framesPerBuffer * sizeof(short));
         data->size += framesPerBuffer;
+        printf("Buffer size: %zu\n", data->size);
+
         data->last_sound_time = current_time;
     }
     else if (data->recording)
