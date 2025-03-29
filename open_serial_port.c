@@ -1,4 +1,3 @@
-#include "h/open_serial_port.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,6 +8,7 @@
 // Helper function to duplicate string
 static char *duplicate_string(const char *str)
 {
+    printf("Duplicating string: %s\n", str);
     char *dup = malloc(strlen(str) + 1);
     if (dup)
         strcpy(dup, str);
@@ -18,6 +18,7 @@ static char *duplicate_string(const char *str)
 // Function to remove leading spaces
 static char *remove_leading_spaces(char *str)
 {
+    printf("Removing leading spaces from: '%s'\n", str);
     while (*str && isspace((unsigned char)*str))
         str++; // Skip leading spaces
     return str;
@@ -26,6 +27,7 @@ static char *remove_leading_spaces(char *str)
 // Function to remove unwanted characters
 static void remove_unwanted_characters(char *str)
 {
+    printf("Removing unwanted characters from: '%s'\n", str);
     int i = 0, j = 0;
     while (str[i])
     {
@@ -44,6 +46,7 @@ static void ensure_start_with_letter(char *str)
 {
     // Remove leading spaces
     char *cleaned = remove_leading_spaces(str);
+    printf("Ensuring the string starts with a letter: '%s'\n", cleaned);
 
     // If it doesn't start with a letter, we can change it to "radio"
     if (!isalpha((unsigned char)cleaned[0]))
@@ -58,6 +61,7 @@ static void ensure_start_with_letter(char *str)
 // Function to remove multiple spaces and only keep one space
 static void remove_extra_spaces(char *str)
 {
+    printf("Removing extra spaces from: '%s'\n", str);
     int i = 0;
     int j = 0;
     int space_found = 0;
@@ -86,6 +90,7 @@ static void remove_extra_spaces(char *str)
 // Function to clean the string (only letters and one space)
 static void clean_string(char *str)
 {
+    printf("Cleaning the string: '%s'\n", str);
     ensure_start_with_letter(str);
     remove_extra_spaces(str);
     remove_unwanted_characters(str);
@@ -95,6 +100,7 @@ static void clean_string(char *str)
 static void remove_endings(char *str)
 {
     size_t len = strlen(str);
+    printf("Removing endings from: '%s'\n", str);
 
     // Remove "AML"
     if (len >= 3 && strcmp(str + len - 3, "AML") == 0)
@@ -112,6 +118,8 @@ static void remove_endings(char *str)
 
 char *open_serial_port(const char *com_port)
 {
+    printf("Attempting to open port: %s\n", com_port);
+
     if (com_port == NULL || strlen(com_port) == 0)
     {
         fprintf(stderr, "Error: Invalid port name\n");
@@ -122,14 +130,17 @@ char *open_serial_port(const char *com_port)
     enum sp_return ret;
 
     // Get the port by name
+    printf("Getting port by name...\n");
     ret = sp_get_port_by_name(com_port, &port);
     if (ret != SP_OK)
     {
         fprintf(stderr, "Error: Could not find port %s\n", com_port);
         return duplicate_string("radio");
     }
+    printf("Successfully got port: %s\n", com_port);
 
     // Open the port for reading
+    printf("Opening the port for reading...\n");
     ret = sp_open(port, SP_MODE_READ);
     if (ret != SP_OK)
     {
@@ -137,8 +148,10 @@ char *open_serial_port(const char *com_port)
         sp_free_port(port);
         return duplicate_string("radio");
     }
+    printf("Successfully opened port: %s\n", com_port);
 
     // Configure the port: set baud rate to 38400, 8N1
+    printf("Configuring port settings...\n");
     ret = sp_set_baudrate(port, 38400);
     if (ret != SP_OK)
     {
@@ -147,6 +160,7 @@ char *open_serial_port(const char *com_port)
         sp_free_port(port);
         return duplicate_string("radio");
     }
+
     ret = sp_set_bits(port, 8);
     ret |= sp_set_parity(port, SP_PARITY_NONE);
     ret |= sp_set_stopbits(port, 1);
@@ -174,6 +188,7 @@ char *open_serial_port(const char *com_port)
     int bytes_read = 0;
 
     // Loop until we detect marker "II" in our accumulated string.
+    printf("Starting data read loop...\n");
     while (1)
     {
         ret = sp_nonblocking_read(port, buf, sizeof(buf) - 1);
@@ -199,6 +214,7 @@ char *open_serial_port(const char *com_port)
 
             // Append filtered data to result
             strncat(result, filtered, 1023 - strlen(result));
+            printf("Accumulated result: '%s'\n", result);
 
             // Look for the marker "II"
             char *marker = strstr(result, "II");
@@ -219,6 +235,7 @@ char *open_serial_port(const char *com_port)
                 sp_close(port);
                 sp_free_port(port);
                 free(result);
+                printf("Returning extracted and cleaned result: '%s'\n", extracted);
                 return duplicate_string(extracted);
             }
         }
