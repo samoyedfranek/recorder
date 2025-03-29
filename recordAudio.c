@@ -179,7 +179,7 @@ void recorder(const char *com_port)
         return;
     }
 
-    printf("Recording started. Press Ctrl+C to stop.\n");
+    // printf("Recording started. Press Ctrl+C to stop.\n");
     while (1)
     {
         sleep(1);
