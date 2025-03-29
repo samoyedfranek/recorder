@@ -144,17 +144,15 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
 }
 
 // --- Recorder Function ---
-void recorder()
+void recorder(const char *com_port)
 {
     PaError err;
     PaStream *stream;
     AudioData data = {0};
 
-    if (open_serial_port(data.serial_name, sizeof(data.serial_name)) != 0)
-    {
-        fprintf(stderr, "Failed to open serial port.\n");
-        return;
-    }
+    // Open serial port and fetch the name
+    char *serial_name = open_serial_port(com_port);
+    snprintf(data.serial_name, sizeof(data.serial_name), "%s", serial_name ? serial_name : "unknown");
 
     err = Pa_Initialize();
     if (err != paNoError)
