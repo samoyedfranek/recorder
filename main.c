@@ -112,7 +112,7 @@ void monitor_directory(const char *directory)
 void *recorder_thread(void *arg)
 {
     printf("Starting recording on device with COM port %s\n", COM_PORT);
-    send_telegram_status(BOT_TOKEN, CHAT_IDS, "Recording started");
+    send_telegram_status(BOT_TOKEN, CHAT_IDS, "Rozpoczynanie nagrywania");
     recorder(COM_PORT);
     return NULL;
 }
