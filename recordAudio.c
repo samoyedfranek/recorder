@@ -200,7 +200,15 @@ void recorder(const char *com_port)
         return;
     }
 
-    // Stop recording
+    printf("Recording loop started. Automatically stops when silence exceeds threshold.\n");
+
+    // Let the recording continue until silence threshold is exceeded
+    while (data.recording)
+    {
+        usleep(100000);  // Sleep for a short period to avoid busy-waiting
+    }
+
+    // Stop recording when silence threshold is reached
     err = Pa_StopStream(stream);
     Pa_CloseStream(stream);
     Pa_Terminate();
