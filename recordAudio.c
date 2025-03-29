@@ -46,7 +46,7 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
         return paContinue;
     }
 
-    // Compute max amplitude
+    // Compute max amplitude in the chunk
     int max_amplitude = 0;
     for (unsigned int i = 0; i < framesPerBuffer; i++)
     {
@@ -60,7 +60,7 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
 
     time_t current_time = time(NULL);
 
-    // Start recording if threshold is exceeded
+    // Start recording if amplitude exceeds threshold
     if (max_amplitude > AMPLITUDE_THRESHOLD && !data->recording)
     {
         printf("Recording started.\n");
@@ -76,7 +76,7 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
         data->last_sound_time = current_time; // Mark the last detected sound
     }
 
-    // If recording, store everything (even silence)
+    // If recording, store all data (including silence)
     if (data->recording)
     {
         if (data->size + framesPerBuffer > data->capacity)
@@ -93,7 +93,7 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
         data->size += framesPerBuffer;
         printf("Buffer size: %zu\n", data->size);
 
-        // Update last sound detection time
+        // Update the last sound detection time if the sound is above the threshold
         if (max_amplitude > AMPLITUDE_THRESHOLD)
         {
             data->last_sound_time = current_time;
@@ -181,6 +181,9 @@ void recorder(const char *com_port)
     }
 
     printf("Recording loop started... Press Enter to stop.\n");
+
+    // Wait for user input to stop recording
+    getchar();
 
     // Stop recording
     err = Pa_StopStream(stream);
