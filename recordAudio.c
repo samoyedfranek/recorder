@@ -13,7 +13,8 @@
 #define CHANNELS 1
 #define CHUNK_SIZE 1024 // Frames per buffer
 #define AMPLITUDE_THRESHOLD 300
-#define SILENCE_THRESHOLD 5 // Seconds of silence before stopping
+#define SILENCE_THRESHOLD 5   // Seconds of silence before stopping
+#define REMOVE_LAST_SECONDS 5 // Seconds to remove from the end of the recording
 
 // Directories for saving files
 #define CACHE_DIR "./cache"
@@ -111,6 +112,18 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
         {
             printf("Silence detected for too long. Stopping recording...\n");
 
+            // Remove the last 5 seconds from the buffer
+            size_t remove_samples = REMOVE_LAST_SECONDS * SAMPLE_RATE;
+            if (data->size > remove_samples)
+            {
+                data->size -= remove_samples;
+            }
+            else
+            {
+                // If the recording is shorter than 5 seconds, just reset to 0 size
+                data->size = 0;
+            }
+
             // Save the recording
             if (data->size > 0)
             {
@@ -186,11 +199,6 @@ void recorder(const char *com_port)
         Pa_Terminate();
         return;
     }
-
-    printf("Recording loop started... Press Enter to stop.\n");
-
-    // Wait for user input to stop recording
-    getchar();
 
     // Stop recording
     err = Pa_StopStream(stream);
