@@ -46,7 +46,7 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
         return paContinue;
     }
 
-    // Compute maximum amplitude in the chunk
+    // Compute max amplitude
     int max_amplitude = 0;
     for (unsigned int i = 0; i < framesPerBuffer; i++)
     {
@@ -58,35 +58,85 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
     }
     printf("Frames captured: %lu, Max amplitude: %d\n", framesPerBuffer, max_amplitude);
 
-    // Ensure buffer allocation before recording
-    if (!data->buffer)
+    time_t current_time = time(NULL);
+
+    // Start recording if threshold is exceeded
+    if (max_amplitude > AMPLITUDE_THRESHOLD && !data->recording)
     {
-        data->capacity = SAMPLE_RATE * 60; // Allocate space for at least 1 minute
+        printf("Recording started.\n");
+        data->recording = 1;
         data->size = 0;
+        data->capacity = SAMPLE_RATE * 10; // Allocate for 10 seconds initially
         data->buffer = (short *)malloc(data->capacity * sizeof(short));
         if (!data->buffer)
         {
             fprintf(stderr, "Memory allocation failed!\n");
             return paAbort;
         }
+        data->last_sound_time = current_time; // Mark the last detected sound
     }
 
-    // Expand buffer if needed
-    if (data->size + framesPerBuffer > data->capacity)
+    // If recording, store everything (even silence)
+    if (data->recording)
     {
-        data->capacity *= 2;
-        data->buffer = realloc(data->buffer, data->capacity * sizeof(short));
-        if (!data->buffer)
+        if (data->size + framesPerBuffer > data->capacity)
         {
-            fprintf(stderr, "Memory reallocation failed!\n");
-            return paAbort;
+            data->capacity *= 2;
+            data->buffer = realloc(data->buffer, data->capacity * sizeof(short));
+            if (!data->buffer)
+            {
+                fprintf(stderr, "Memory reallocation failed!\n");
+                return paAbort;
+            }
+        }
+        memcpy(data->buffer + data->size, input, framesPerBuffer * sizeof(short));
+        data->size += framesPerBuffer;
+        printf("Buffer size: %zu\n", data->size);
+
+        // Update last sound detection time
+        if (max_amplitude > AMPLITUDE_THRESHOLD)
+        {
+            data->last_sound_time = current_time;
+        }
+
+        // Stop recording if silence lasts too long
+        if (difftime(current_time, data->last_sound_time) > SILENCE_THRESHOLD)
+        {
+            printf("Silence detected. Stopping recording...\n");
+
+            // Save the recording
+            if (data->size > 0)
+            {
+                char filename[256], final_file_path[256];
+                char time_str[64];
+                time_t now = time(NULL);
+                struct tm *t = localtime(&now);
+                strftime(time_str, sizeof(time_str), "%Y%m%d_%H%M%S", t);
+                snprintf(filename, sizeof(filename), "%s_%s.wav", data->serial_name, time_str);
+                snprintf(final_file_path, sizeof(final_file_path), RECORDINGS_DIR "/%s", filename);
+
+                if (write_wav_file(final_file_path, data->buffer, data->size, SAMPLE_RATE) == 0)
+                {
+                    printf("Recording saved: %s\n", final_file_path);
+                }
+                else
+                {
+                    fprintf(stderr, "Failed to write WAV file.\n");
+                }
+            }
+            else
+            {
+                printf("Recording too short, skipping save.\n");
+            }
+
+            // Reset recording data
+            free(data->buffer);
+            data->buffer = NULL;
+            data->size = 0;
+            data->capacity = 0;
+            data->recording = 0;
         }
     }
-
-    // Store audio data regardless of silence
-    memcpy(data->buffer + data->size, input, framesPerBuffer * sizeof(short));
-    data->size += framesPerBuffer;
-    printf("Buffer size: %zu\n", data->size);
 
     return paContinue;
 }
@@ -131,7 +181,6 @@ void recorder(const char *com_port)
     }
 
     printf("Recording loop started... Press Enter to stop.\n");
-    getchar();
 
     // Stop recording
     err = Pa_StopStream(stream);
