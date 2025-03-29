@@ -144,12 +144,11 @@ int send_to_telegram(const char *file_path, const char *bot_token, char **chat_i
             curl_easy_cleanup(curl);
             return 0; // Exit on failure
         }
-
-        // Remove the file after sending
-        if (remove(new_file_path) != 0)
-        {
-            fprintf(stderr, "Failed to remove file %s: %s\n", new_file_path, strerror(errno));
-        }
+    }
+    // Remove the file after sending
+    if (remove(new_file_path) != 0)
+    {
+        fprintf(stderr, "Failed to remove file %s: %s\n", new_file_path, strerror(errno));
     }
 
     curl_easy_cleanup(curl); // Clean up the CURL instance
