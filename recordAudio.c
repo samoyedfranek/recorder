@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <portaudio.h>
 #include "h/write_wav_file.h"
+#include "h/open_serial_port.h"
 
 // --- Configuration Constants ---
 #define SAMPLE_RATE 48000
@@ -25,6 +26,7 @@ typedef struct
     size_t capacity;
     int recording;
     time_t last_sound_time;
+    char serial_name[256];
 } AudioData;
 
 // --- Audio Callback Function ---
@@ -113,7 +115,7 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
                 time_t now = time(NULL);
                 struct tm *t = localtime(&now);
                 strftime(time_str, sizeof(time_str), "%Y%m%d_%H%M%S", t);
-                snprintf(filename, sizeof(filename), "recording_%s.wav", time_str);
+                snprintf(filename, sizeof(filename), "%s_%s.wav", data->serial_name, time_str);
                 snprintf(final_file_path, sizeof(final_file_path), RECORDINGS_DIR "/%s", filename);
 
                 if (write_wav_file(final_file_path, data->buffer, data->size, SAMPLE_RATE) == 0)
@@ -147,6 +149,12 @@ void recorder()
     PaError err;
     PaStream *stream;
     AudioData data = {0};
+
+    if (open_serial_port(data.serial_name, sizeof(data.serial_name)) != 0)
+    {
+        fprintf(stderr, "Failed to open serial port.\n");
+        return;
+    }
 
     err = Pa_Initialize();
     if (err != paNoError)
