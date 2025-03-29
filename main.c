@@ -111,9 +111,9 @@ void monitor_directory(const char *directory)
 // Recorder function running in a separate thread
 void *recorder_thread(void *arg)
 {
-    printf("Starting recording on device with COM port %s\n", COM_PORT);
+    printf("Starting recording on device %d with COM port %s\n", AUDIO_INPUT_DEVICE, COM_PORT);
     send_telegram_status(BOT_TOKEN, CHAT_IDS, "Recording started");
-    recorder(COM_PORT);
+    recorder(AUDIO_INPUT_DEVICE, COM_PORT);
     return NULL;
 }
 
