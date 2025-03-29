@@ -8,13 +8,18 @@
 #include "h/open_serial_port.h"
 #include "h/write_wav_file.h"
 
+// --- Configuration Constants ---
 #define SAMPLE_RATE 48000
 #define CHANNELS 1
-#define SAMPLE_SIZE 2   // 16-bit samples (2 bytes per sample)
-#define CHUNK_SIZE 1024 // Frames per read
+#define CHUNK_SIZE 1024 // Frames per buffer
 #define AMPLITUDE_THRESHOLD 300
 #define SILENCE_THRESHOLD 5 // Seconds of silence before stopping
 
+// Directories for saving files
+#define CACHE_DIR "./cache"
+#define RECORDINGS_DIR "./recordings"
+
+// --- Audio Data Structure ---
 typedef struct
 {
     short *buffer;
@@ -22,43 +27,38 @@ typedef struct
     size_t capacity;
     int recording;
     time_t last_sound_time;
+    char serial_name[256];
 } AudioData;
 
+// --- Audio Callback Function ---
 static int audioCallback(const void *inputBuffer, void *outputBuffer,
                          unsigned long framesPerBuffer,
                          const PaStreamCallbackTimeInfo *timeInfo,
                          PaStreamCallbackFlags statusFlags,
                          void *userData)
 {
-    (void)outputBuffer;
-    (void)timeInfo;
-    (void)statusFlags;
-
     AudioData *data = (AudioData *)userData;
+    const short *input = (const short *)inputBuffer;
 
-    if (inputBuffer == NULL)
+    if (!input)
     {
         fprintf(stderr, "No input detected!\n");
         return paContinue;
     }
 
-    // Cast input buffer to short (16-bit PCM)
-    const short *samples = (const short *)inputBuffer;
-
-    // Compute max amplitude
+    // Compute maximum amplitude in the chunk
     int max_amplitude = 0;
     for (unsigned int i = 0; i < framesPerBuffer; i++)
     {
-        int sample = abs(samples[i]);
+        int sample = abs(input[i]);
         if (sample > max_amplitude)
         {
             max_amplitude = sample;
         }
     }
+    printf("Frames captured: %lu, Max amplitude: %d\n", framesPerBuffer, max_amplitude);
 
-    // Debugging: Print first few sample values
-    printf("Sample[0] = %d, Sample[1] = %d, Max Amplitude: %d\n", samples[0], samples[1], max_amplitude);
-
+    // Check if recording should start
     time_t current_time = time(NULL);
     if (max_amplitude > AMPLITUDE_THRESHOLD)
     {
@@ -67,56 +67,41 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
             printf("Recording started.\n");
             data->recording = 1;
             data->last_sound_time = current_time;
-            data->capacity = SAMPLE_RATE * 10; // Allocate space for 10 seconds
+            data->capacity = SAMPLE_RATE * 10;
             data->size = 0;
-            data->buffer = (short *)realloc(data->buffer, data->capacity * sizeof(short));
+            data->buffer = (short *)malloc(data->capacity * sizeof(short));
             if (!data->buffer)
             {
-                fprintf(stderr, "Memory allocation failed\n");
+                fprintf(stderr, "Memory allocation failed!\n");
                 return paAbort;
             }
         }
 
-        // Ensure buffer space
+        // Store audio data
         if (data->size + framesPerBuffer > data->capacity)
         {
             data->capacity *= 2;
             data->buffer = realloc(data->buffer, data->capacity * sizeof(short));
             if (!data->buffer)
             {
-                fprintf(stderr, "Memory reallocation failed\n");
+                fprintf(stderr, "Memory reallocation failed!\n");
                 return paAbort;
             }
         }
-
-        // Copy audio data into buffer
-        memcpy(data->buffer + data->size, samples, framesPerBuffer * sizeof(short));
+        memcpy(data->buffer + data->size, input, framesPerBuffer * sizeof(short));
         data->size += framesPerBuffer;
+        printf("Buffer size: %zu\n", data->size);
+
         data->last_sound_time = current_time;
     }
     else if (data->recording)
     {
-        // Add silence if still recording
-        short silence[CHUNK_SIZE] = {0};
-        if (data->size + framesPerBuffer > data->capacity)
-        {
-            data->capacity *= 2;
-            data->buffer = realloc(data->buffer, data->capacity * sizeof(short));
-            if (!data->buffer)
-            {
-                fprintf(stderr, "Memory reallocation failed\n");
-                return paAbort;
-            }
-        }
-        memcpy(data->buffer + data->size, silence, framesPerBuffer * sizeof(short));
-        data->size += framesPerBuffer;
-
-        // Check for silence duration
+        // Check for silence threshold to stop recording
         if (difftime(current_time, data->last_sound_time) > SILENCE_THRESHOLD)
         {
             printf("Silence detected. Saving recording...\n");
 
-            // Trim last 4 seconds of silence
+            // Trim last 4 seconds (optional)
             size_t cut_samples = SAMPLE_RATE * 4;
             if (data->size > cut_samples)
             {
@@ -127,10 +112,26 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
                 data->size = 0;
             }
 
-            // Save recording if long enough
+            // Save the recording to a file
             if (data->size > 0)
             {
-                printf("Recording saved (size: %zu samples)\n", data->size);
+                char filename[256], final_file_path[256];
+                char time_str[64];
+                time_t now = time(NULL);
+                struct tm *t = localtime(&now);
+                strftime(time_str, sizeof(time_str), "%Y%m%d_%H%M%S", t);
+                snprintf(filename, sizeof(filename), "%s_%s.wav", data->serial_name, time_str);
+                snprintf(final_file_path, sizeof(final_file_path), RECORDINGS_DIR "/%s", filename);
+
+                // Save to WAV file
+                if (write_wav_file(final_file_path, data->buffer, data->size, SAMPLE_RATE) == 0)
+                {
+                    printf("Recording saved: %s\n", final_file_path);
+                }
+                else
+                {
+                    fprintf(stderr, "Failed to write WAV file.\n");
+                }
             }
             else
             {
@@ -148,17 +149,22 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
     return paContinue;
 }
 
-void startRecording()
+// --- Recorder Function ---
+void recorder(const char *com_port)
 {
     PaError err;
     PaStream *stream;
-    AudioData data = {NULL, 0, 0, 0, 0};
+    AudioData data = {0};
+
+    // Get serial name for filename
+    char *serial_name = open_serial_port(com_port);
+    snprintf(data.serial_name, sizeof(data.serial_name), "%s", serial_name ? serial_name : "unknown");
 
     // Initialize PortAudio
     err = Pa_Initialize();
     if (err != paNoError)
     {
-        fprintf(stderr, "PortAudio error: %s\n", Pa_GetErrorText(err));
+        fprintf(stderr, "PortAudio init error: %s\n", Pa_GetErrorText(err));
         return;
     }
 
@@ -167,28 +173,32 @@ void startRecording()
                                CHUNK_SIZE, audioCallback, &data);
     if (err != paNoError)
     {
-        fprintf(stderr, "PortAudio error: %s\n", Pa_GetErrorText(err));
+        fprintf(stderr, "PortAudio stream error: %s\n", Pa_GetErrorText(err));
         Pa_Terminate();
         return;
     }
 
-    // Start stream
+    // Start recording
     err = Pa_StartStream(stream);
     if (err != paNoError)
     {
-        fprintf(stderr, "PortAudio error: %s\n", Pa_GetErrorText(err));
+        fprintf(stderr, "PortAudio start error: %s\n", Pa_GetErrorText(err));
         Pa_CloseStream(stream);
         Pa_Terminate();
         return;
     }
 
-    printf("Recording loop started...\nPress Enter to stop.\n");
-    getchar(); // Wait for user input
+    printf("Recording loop started... Press Enter to stop.\n");
+    getchar();
 
-    // Stop stream
-    Pa_StopStream(stream);
+    // Stop recording
+    err = Pa_StopStream(stream);
     Pa_CloseStream(stream);
     Pa_Terminate();
 
-    printf("Recording stopped.\n");
+    // Free buffer if needed
+    if (data.buffer)
+    {
+        free(data.buffer);
+    }
 }
