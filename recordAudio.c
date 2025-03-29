@@ -4,11 +4,9 @@
 #include <math.h>
 #include <time.h>
 #include <unistd.h>
-#include <signal.h>
 #include <portaudio.h>
 #include "h/open_serial_port.h"
 #include "h/write_wav_file.h"
-#include "h/globals.h"
 
 // --- Configuration Constants ---
 #define SAMPLE_RATE 48000
@@ -46,7 +44,6 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
     if (!input)
     {
         fprintf(stderr, "No input detected!\n");
-        fflush(stderr);
         return paContinue;
     }
 
@@ -62,15 +59,13 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
     }
 
     printf("Frames captured: %lu, Max amplitude: %d\n", framesPerBuffer, max_amplitude);
-    fflush(stdout);
 
     time_t current_time = time(NULL);
 
-    // Start recording if amplitude exceeds threshold and we're not already recording
+    // Start recording if amplitude exceeds threshold
     if (max_amplitude > AMPLITUDE_THRESHOLD && !data->recording)
     {
         printf("Recording started.\n");
-        fflush(stdout);
         data->recording = 1;
         data->size = 0;
         data->capacity = SAMPLE_RATE * 10; // Allocate for 10 seconds initially
@@ -78,7 +73,6 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
         if (!data->buffer)
         {
             fprintf(stderr, "Memory allocation failed!\n");
-            fflush(stderr);
             return paAbort;
         }
         data->last_sound_time = current_time; // Mark the last detected sound
@@ -94,31 +88,29 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
             if (!data->buffer)
             {
                 fprintf(stderr, "Memory reallocation failed!\n");
-                fflush(stderr);
                 return paAbort;
             }
         }
         memcpy(data->buffer + data->size, input, framesPerBuffer * sizeof(short));
         data->size += framesPerBuffer;
         printf("Buffer size: %zu\n", data->size);
-        fflush(stdout);
 
-        // Update the last sound detection time if sound is above the threshold
+        // Update the last sound detection time if the sound is above the threshold
         if (max_amplitude > AMPLITUDE_THRESHOLD)
         {
             data->last_sound_time = current_time;
         }
-        else
+
+        // If no sound is detected, check for silence detection
+        if (max_amplitude <= AMPLITUDE_THRESHOLD)
         {
             printf("Silence detected: Max amplitude below threshold\n");
-            fflush(stdout);
         }
 
         // Stop recording if silence lasts too long
         if (difftime(current_time, data->last_sound_time) > SILENCE_THRESHOLD)
         {
             printf("Silence detected for too long. Stopping recording...\n");
-            fflush(stdout);
 
             // Remove the last 5 seconds from the buffer
             size_t remove_samples = REMOVE_LAST_SECONDS * SAMPLE_RATE;
@@ -128,10 +120,11 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
             }
             else
             {
+                // If the recording is shorter than 5 seconds, just reset to 0 size
                 data->size = 0;
             }
 
-            // Save the recording if not too short
+            // Save the recording
             if (data->size > 0)
             {
                 char filename[256], final_file_path[256];
@@ -155,7 +148,6 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
             {
                 printf("Recording too short, skipping save.\n");
             }
-            fflush(stdout);
 
             // Reset recording data
             free(data->buffer);
@@ -188,7 +180,7 @@ void recorder(const char *com_port)
         return;
     }
 
-    // Open default stream
+    // Open stream
     err = Pa_OpenDefaultStream(&stream, CHANNELS, 0, paInt16, SAMPLE_RATE,
                                CHUNK_SIZE, audioCallback, &data);
     if (err != paNoError)
@@ -198,7 +190,7 @@ void recorder(const char *com_port)
         return;
     }
 
-    // Start stream
+    // Start recording
     err = Pa_StartStream(stream);
     if (err != paNoError)
     {
@@ -208,30 +200,14 @@ void recorder(const char *com_port)
         return;
     }
 
-    printf("Recording loop started... Waiting for signal to stop.\n");
-    fflush(stdout);
-
-    // Run until the global flag is cleared
-    while (keepRunning)
-    {
-        Pa_Sleep(100); // Sleep for 100 ms
-    }
-
-    // Stop stream on signal
+    // Stop recording
     err = Pa_StopStream(stream);
-    if (err != paNoError)
-    {
-        fprintf(stderr, "PortAudio stop error: %s\n", Pa_GetErrorText(err));
-    }
     Pa_CloseStream(stream);
     Pa_Terminate();
 
-    // Free buffer if necessary
+    // Free buffer if needed
     if (data.buffer)
     {
         free(data.buffer);
     }
-
-    printf("Recorder stopped.\n");
-    fflush(stdout);
 }
