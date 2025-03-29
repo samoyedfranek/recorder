@@ -200,23 +200,13 @@ void recorder(const char *com_port)
         return;
     }
 
-    printf("Recording started...\n");
+    printf("Recording loop started... Press Enter to stop.\n");
 
-    // Event loop: Ensure the program keeps running until the recording is finished
-    while (data.recording)
-    {
-        // Here we can check periodically if the recording should stop
-        // You can add other code to monitor progress if needed
-        usleep(100000); // Sleep for 100ms to reduce CPU usage and give PortAudio time to process
-    }
+    // Wait for user input to stop recording
+    getchar();
 
-    // Stop recording after data.recording becomes 0
+    // Stop recording
     err = Pa_StopStream(stream);
-    if (err != paNoError)
-    {
-        fprintf(stderr, "PortAudio stop error: %s\n", Pa_GetErrorText(err));
-    }
-
     Pa_CloseStream(stream);
     Pa_Terminate();
 
@@ -225,6 +215,4 @@ void recorder(const char *com_port)
     {
         free(data.buffer);
     }
-
-    printf("Recording stopped.\n");
 }
