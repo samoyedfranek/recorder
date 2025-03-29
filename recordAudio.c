@@ -20,6 +20,9 @@
 #define CACHE_DIR "./cache"
 #define RECORDINGS_DIR "./recordings"
 
+// --- Debug Flag ---
+#define DEBUG true // Set to true to enable debug logs
+
 // --- Audio Data Structure ---
 typedef struct
 {
@@ -30,6 +33,13 @@ typedef struct
     time_t last_sound_time;
     char serial_name[256];
 } AudioData;
+
+// --- Debug Log Macro ---
+#if DEBUG
+#define DEBUG_LOG(fmt, ...) printf("[DEBUG] " fmt, ##__VA_ARGS__)
+#else
+#define DEBUG_LOG(fmt, ...) // No-op when DEBUG is false
+#endif
 
 // --- Audio Callback Function ---
 static int audioCallback(const void *inputBuffer, void *outputBuffer,
@@ -58,14 +68,14 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
         }
     }
 
-    printf("Frames captured: %lu, Max amplitude: %d\n", framesPerBuffer, max_amplitude);
+    DEBUG_LOG("Frames captured: %lu, Max amplitude: %d\n", framesPerBuffer, max_amplitude);
 
     time_t current_time = time(NULL);
 
     // Start recording if amplitude exceeds threshold
     if (max_amplitude > AMPLITUDE_THRESHOLD && !data->recording)
     {
-        printf("Recording started.\n");
+        DEBUG_LOG("Recording started.\n");
         data->recording = 1;
         data->size = 0;
         data->capacity = SAMPLE_RATE * 10; // Allocate for 10 seconds initially
@@ -93,7 +103,7 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
         }
         memcpy(data->buffer + data->size, input, framesPerBuffer * sizeof(short));
         data->size += framesPerBuffer;
-        printf("Buffer size: %zu\n", data->size);
+        DEBUG_LOG("Buffer size: %zu\n", data->size);
 
         // Update the last sound detection time if the sound is above the threshold
         if (max_amplitude > AMPLITUDE_THRESHOLD)
@@ -104,13 +114,13 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
         // If no sound is detected, check for silence detection
         if (max_amplitude <= AMPLITUDE_THRESHOLD)
         {
-            printf("Silence detected: Max amplitude below threshold\n");
+            DEBUG_LOG("Silence detected: Max amplitude below threshold\n");
         }
 
         // Stop recording if silence lasts too long
         if (difftime(current_time, data->last_sound_time) > SILENCE_THRESHOLD)
         {
-            printf("Silence detected for too long. Stopping recording...\n");
+            DEBUG_LOG("Silence detected for too long. Stopping recording...\n");
 
             // Remove the last 5 seconds from the buffer
             size_t remove_samples = REMOVE_LAST_SECONDS * SAMPLE_RATE;
@@ -137,7 +147,7 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
 
                 if (write_wav_file(final_file_path, data->buffer, data->size, SAMPLE_RATE) == 0)
                 {
-                    printf("Recording saved: %s\n", final_file_path);
+                    DEBUG_LOG("Recording saved: %s\n", final_file_path);
                 }
                 else
                 {
@@ -146,7 +156,7 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
             }
             else
             {
-                printf("Recording too short, skipping save.\n");
+                DEBUG_LOG("Recording too short, skipping save.\n");
             }
 
             // Reset recording data
@@ -200,7 +210,7 @@ void recorder(const char *com_port)
         return;
     }
 
-    printf("Recording loop started... Press Enter to stop.\n");
+    DEBUG_LOG("Recording loop started... Press Enter to stop.\n");
 
     // Wait for user input to stop recording
     getchar();
