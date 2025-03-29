@@ -200,6 +200,11 @@ void recorder(const char *com_port)
         return;
     }
 
+    printf("Recording loop started... Press Enter to stop.\n");
+
+    // Wait for user input to stop recording
+    getchar();
+
     // Stop recording
     err = Pa_StopStream(stream);
     Pa_CloseStream(stream);
