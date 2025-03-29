@@ -75,7 +75,7 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
     // Start recording if amplitude exceeds threshold
     if (max_amplitude > AMPLITUDE_THRESHOLD && !data->recording)
     {
-        printf("Recording started.\n");
+        DEBUG_LOG("Recording started.\n");
         data->recording = 1;
         data->size = 0;
         data->capacity = SAMPLE_RATE * 10; // Allocate for 10 seconds initially
@@ -120,7 +120,7 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
         // Stop recording if silence lasts too long
         if (difftime(current_time, data->last_sound_time) > SILENCE_THRESHOLD)
         {
-            printf("Silence detected for too long. Stopping recording...\n");
+            DEBUG_LOG("Silence detected for too long. Stopping recording...\n");
 
             // Remove the last 5 seconds from the buffer
             size_t remove_samples = REMOVE_LAST_SECONDS * SAMPLE_RATE;
@@ -210,7 +210,7 @@ void recorder(const char *com_port)
         return;
     }
 
-    printf("Recording loop started... Press Enter to stop.\n");
+    DEBUG_LOG("Recording loop started... Press Enter to stop.\n");
 
     // Wait until recording is stopped due to silence threshold or other conditions
     while (data.recording)
