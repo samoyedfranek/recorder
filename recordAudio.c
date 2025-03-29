@@ -55,7 +55,7 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
         }
     }
 
-    // printf("Frames captured: %lu, Max amplitude: %d\n", framesPerBuffer, max_amplitude);
+    printf("Frames captured: %lu, Max amplitude: %d\n", framesPerBuffer, max_amplitude);
 
     time_t current_time = time(NULL);
 
