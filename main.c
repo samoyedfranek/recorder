@@ -9,6 +9,12 @@
 #include "h/telegramSend.h"
 #include "h/recordAudio.h"
 #include "h/config.h" // Include the config header
+#include <alsa/asoundlib.h>
+
+static void silent_alsa_error(const char *file, int line, const char *function, int err, const char *fmt, ...)
+{
+    // Do nothing. Optionally, you could log to a file or syslog if needed.
+}
 
 // Function to send file to Telegram
 void send_existing_files(const char *directory)
@@ -132,6 +138,7 @@ void *recorder_thread(void *arg)
 // Main function
 int main(void)
 {
+    snd_lib_error_set_handler(silent_alsa_error);
     setvbuf(stdout, NULL, _IOLBF, 0);
     setvbuf(stderr, NULL, _IOLBF, 0);
     // Load configuration from .env file
