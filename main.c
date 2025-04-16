@@ -6,11 +6,13 @@
 #include <pthread.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <alsa/asoundlib.h>
+#include <jack/jack.h>
+#include <fcntl.h>
+#include <errno.h>
 #include "h/telegramSend.h"
 #include "h/recordAudio.h"
 #include "h/config.h"
-#include <alsa/asoundlib.h>
-#include <jack/jack.h>
 
 static void silent_alsa_error(const char *file, int line, const char *function,
                               int err, const char *fmt, ...) {}
@@ -24,6 +26,21 @@ __attribute__((constructor)) static void suppress_audio_errors(void)
     snd_lib_error_set_handler(silent_alsa_error);
     jack_set_error_function(silent_jack_error);
     jack_set_info_function(silent_jack_info);
+}
+
+int create_directory_if_not_exists(const char *dir_path)
+{
+    struct stat st = {0};
+    if (stat(dir_path, &st) == -1)
+    {
+        if (mkdir(dir_path, 0700) == -1)
+        {
+            perror("Failed to create directory");
+            return -1;
+        }
+        printf("Directory created: %s\n", dir_path);
+    }
+    return 0;
 }
 
 void send_existing_files(const char *directory)
@@ -143,6 +160,11 @@ int main(void)
     setvbuf(stderr, NULL, _IOLBF, 0);
 
     load_config(".env");
+
+    if (create_directory_if_not_exists(RECORDING_DIRECTORY) != 0)
+    {
+        return 1;
+    }
 
     pthread_t recorder_thread_id, monitor_thread_id;
 
