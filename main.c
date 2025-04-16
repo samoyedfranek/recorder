@@ -10,12 +10,34 @@
 #include "h/recordAudio.h"
 #include "h/config.h" // Include the config header
 #include <alsa/asoundlib.h>
+#include <jack/jack.h>
 
-static void silent_alsa_error(const char *file, int line, const char *function, int err, const char *fmt, ...)
+// Dummy ALSA error handler: does nothing
+static void silent_alsa_error(const char *file, int line, const char *function,
+                              int err, const char *fmt, ...)
 {
-    // Do nothing. Optionally, you could log to a file or syslog if needed.
+    // Intentionally left blank to suppress errors
 }
 
+// Dummy JACK error handler: does nothing
+static void silent_jack_error(const char *msg)
+{
+    // Do nothing.
+}
+
+// Dummy JACK info handler: does nothing
+static void silent_jack_info(const char *msg)
+{
+    // Do nothing.
+}
+
+// This function will run before main(), setting up our error suppression.
+__attribute__((constructor)) static void suppress_audio_errors(void)
+{
+    snd_lib_error_set_handler(silent_alsa_error);
+    jack_set_error_function(silent_jack_error);
+    jack_set_info_function(silent_jack_info);
+}
 // Function to send file to Telegram
 void send_existing_files(const char *directory)
 {
