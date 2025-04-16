@@ -27,9 +27,10 @@ typedef struct
     int recording;
     time_t last_sound_time;
     char serial_name[256];
-    int warmup_frames; // New field for warm-up
+    int prerecord_frames; // New field to store frames to prerecord (1 second)
 } AudioData;
 
+// --- Audio Callback Function ---
 static int audioCallback(const void *inputBuffer, void *outputBuffer,
                          unsigned long framesPerBuffer,
                          const PaStreamCallbackTimeInfo *timeInfo,
@@ -55,14 +56,18 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
         }
     }
 
-    // If we are still in the warm-up phase, just skip processing
-    if (data->warmup_frames > 0)
+    // printf("Frames captured: %lu, Max amplitude: %d\n", framesPerBuffer, max_amplitude);
+
+    // If we are in the prerecord phase (first 1 second of audio), just discard the audio
+    if (data->prerecord_frames > 0)
     {
-        data->warmup_frames -= framesPerBuffer;
-        return paContinue; // Skip actual recording during warm-up
+        size_t frames_to_discard = (size_t)(framesPerBuffer < data->prerecord_frames ? framesPerBuffer : data->prerecord_frames);
+        data->prerecord_frames -= frames_to_discard;
+
+        // Just return without saving audio and discard the first second
+        return paContinue;
     }
 
-    // After warm-up, check for sound threshold to start recording
     time_t current_time = time(NULL);
 
     if (max_amplitude > AMPLITUDE_THRESHOLD && !data->recording)
@@ -148,8 +153,6 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
 
     return paContinue;
 }
-
-// --- Recorder Function ---
 void recorder(const char *com_port)
 {
     PaError err;
@@ -160,8 +163,8 @@ void recorder(const char *com_port)
     char *serial_name = open_serial_port(com_port);
     snprintf(data.serial_name, sizeof(data.serial_name), "%s", serial_name ? serial_name : "unknown");
 
-    // Initialize warm-up (2 seconds of dummy data)
-    data.warmup_frames = SAMPLE_RATE * 2; // 2 seconds of warm-up
+    // Initialize prerecord_frames (1 second of audio)
+    data.prerecord_frames = SAMPLE_RATE; // 1 second of audio
 
     err = Pa_Initialize();
     if (err != paNoError)
