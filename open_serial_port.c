@@ -91,24 +91,24 @@ static void clean_string(char *str)
     remove_unwanted_characters(str);
 }
 
-// Function to remove unwanted endings (AM, AML, L, LL)
+// Function to remove suffix and everything after (AML, AM, LL, LM, L)
 static void remove_endings(char *str)
 {
+    const char *endings[] = {"AML", "AM", "LL", "LM", "L"};
     size_t len = strlen(str);
 
-    // Remove "AML"
-    if (len >= 3 && strcmp(str + len - 3, "AML") == 0)
-        str[len - 3] = '\0';
-    // Remove "AM"
-    else if (len >= 2 && strcmp(str + len - 2, "AM") == 0)
-        str[len - 2] = '\0';
-    // Remove "LL"
-    else if (len >= 2 && strcmp(str + len - 2, "LL") == 0)
-        str[len - 2] = '\0';
-    // Remove "L"
-    else if (len >= 1 && str[len - 1] == 'L')
-        str[len - 1] = '\0';
+    for (int i = 0; i < sizeof(endings) / sizeof(endings[0]); i++)
+    {
+        char *pos = strstr(str, endings[i]);
+        if (pos != NULL)
+        {
+            // Cut off the suffix and everything after
+            *pos = '\0';
+            break;
+        }
+    }
 }
+
 
 char *open_serial_port(const char *com_port)
 {
