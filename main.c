@@ -132,6 +132,8 @@ void *recorder_thread(void *arg)
 // Main function
 int main(void)
 {
+    setvbuf(stdout, NULL, _IOLBF, 0);
+    setvbuf(stderr, NULL, _IOLBF, 0);
     // Load configuration from .env file
     load_config(".env");
 
