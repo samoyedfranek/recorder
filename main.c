@@ -55,7 +55,7 @@ void on_new_file_created(uv_fs_event_t *handle, const char *filename, int events
         return;
 
     // Process events for rename or change
-    if (events & UV_RENAME || events & UV_CHANGE)
+    if ((events & UV_RENAME) || (events & UV_CHANGE))
     {
         // Retrieve the monitored directory from the handle data
         const char *directory = (const char *)handle->data;
@@ -78,19 +78,26 @@ void on_new_file_created(uv_fs_event_t *handle, const char *filename, int events
     }
 }
 
-// Monitor directory using libuv
-void monitor_directory(const char *directory)
+// Monitor directory using libuv in its own thread
+void *monitor_directory_thread(void *arg)
 {
-    uv_loop_t *loop = uv_default_loop();
+    const char *directory = (const char *)arg;
+    uv_loop_t loop;
+
+    // Create a dedicated event loop for this thread
+    if (uv_loop_init(&loop))
+    {
+        fprintf(stderr, "Error initializing uv loop\n");
+        return NULL;
+    }
+
     uv_fs_event_t fs_event;
-
-    printf("Initializing directory monitoring for: %s\n", directory);
-
-    int status = uv_fs_event_init(loop, &fs_event);
+    int status = uv_fs_event_init(&loop, &fs_event);
     if (status != 0)
     {
         fprintf(stderr, "Error initializing fs event: %s\n", uv_strerror(status));
-        return;
+        uv_loop_close(&loop);
+        return NULL;
     }
 
     // Store the directory path in the event handle's data for later use
@@ -100,12 +107,17 @@ void monitor_directory(const char *directory)
     if (status != 0)
     {
         fprintf(stderr, "Error starting file event monitoring: %s\n", uv_strerror(status));
-        return;
+        uv_fs_event_stop(&fs_event);
+        uv_loop_close(&loop);
+        return NULL;
     }
 
     printf("Monitoring directory: %s\n", directory);
-    uv_run(loop, UV_RUN_DEFAULT);
+    uv_run(&loop, UV_RUN_DEFAULT);
+
     uv_fs_event_stop(&fs_event);
+    uv_loop_close(&loop);
+    return NULL;
 }
 
 // Recorder function running in a separate thread
@@ -135,14 +147,14 @@ int main(void)
         return 1;
     }
 
-    // Create a thread for directory monitoring
-    if (pthread_create(&monitor_thread_id, NULL, (void *(*)(void *))monitor_directory, (void *)RECORDING_DIRECTORY) != 0)
+    // Create a thread for directory monitoring using our dedicated loop
+    if (pthread_create(&monitor_thread_id, NULL, monitor_directory_thread, (void *)RECORDING_DIRECTORY) != 0)
     {
         perror("Failed to create monitor thread");
         return 1;
     }
 
-    // Wait for both threads to finish
+    // Wait for both threads to finish (infinite loops here, so you'll likely signal termination externally)
     pthread_join(recorder_thread_id, NULL);
     pthread_join(monitor_thread_id, NULL);
 
