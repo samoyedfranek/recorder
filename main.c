@@ -8,37 +8,24 @@
 #include <unistd.h>
 #include "h/telegramSend.h"
 #include "h/recordAudio.h"
-#include "h/config.h" // Include the config header
+#include "h/config.h"
 #include <alsa/asoundlib.h>
 #include <jack/jack.h>
 
-// Dummy ALSA error handler: does nothing
 static void silent_alsa_error(const char *file, int line, const char *function,
-                              int err, const char *fmt, ...)
-{
-    // Intentionally left blank to suppress errors
-}
+                              int err, const char *fmt, ...) {}
 
-// Dummy JACK error handler: does nothing
-static void silent_jack_error(const char *msg)
-{
-    // Do nothing.
-}
+static void silent_jack_error(const char *msg) {}
 
-// Dummy JACK info handler: does nothing
-static void silent_jack_info(const char *msg)
-{
-    // Do nothing.
-}
+static void silent_jack_info(const char *msg) {}
 
-// This function will run before main(), setting up our error suppression.
 __attribute__((constructor)) static void suppress_audio_errors(void)
 {
     snd_lib_error_set_handler(silent_alsa_error);
     jack_set_error_function(silent_jack_error);
     jack_set_info_function(silent_jack_info);
 }
-// Function to send file to Telegram
+
 void send_existing_files(const char *directory)
 {
     DIR *dir;
@@ -61,7 +48,7 @@ void send_existing_files(const char *directory)
         struct stat file_stat;
         if (stat(file_path, &file_stat) == 0)
         {
-            if (S_ISREG(file_stat.st_mode)) // Ensure it's a regular file
+            if (S_ISREG(file_stat.st_mode))
             {
                 printf("Sending existing file: %s\n", file_path);
                 send_to_telegram(file_path, BOT_TOKEN, CHAT_IDS);
@@ -76,28 +63,24 @@ void send_existing_files(const char *directory)
     closedir(dir);
 }
 
-// Libuv directory change event callback
 void on_new_file_created(uv_fs_event_t *handle, const char *filename, int events, int status)
 {
     if (filename == NULL)
         return;
 
-    // Process events for rename or change
     if ((events & UV_RENAME) || (events & UV_CHANGE))
     {
-        // Retrieve the monitored directory from the handle data
+
         const char *directory = (const char *)handle->data;
         char full_path[512];
         snprintf(full_path, sizeof(full_path), "%s/%s", directory, filename);
 
-        // Optional: wait briefly to ensure file is fully written
         sleep(1);
 
-        // Check if the file exists and is a regular file
         struct stat file_stat;
         if (stat(full_path, &file_stat) != 0 || !S_ISREG(file_stat.st_mode))
         {
-            // If not a regular file, skip it
+
             return;
         }
 
@@ -106,13 +89,11 @@ void on_new_file_created(uv_fs_event_t *handle, const char *filename, int events
     }
 }
 
-// Monitor directory using libuv in its own thread
 void *monitor_directory_thread(void *arg)
 {
     const char *directory = (const char *)arg;
     uv_loop_t loop;
 
-    // Create a dedicated event loop for this thread
     if (uv_loop_init(&loop))
     {
         fprintf(stderr, "Error initializing uv loop\n");
@@ -128,7 +109,6 @@ void *monitor_directory_thread(void *arg)
         return NULL;
     }
 
-    // Store the directory path in the event handle's data for later use
     fs_event.data = (void *)directory;
 
     status = uv_fs_event_start(&fs_event, on_new_file_created, directory, UV_FS_EVENT_RECURSIVE);
@@ -148,7 +128,6 @@ void *monitor_directory_thread(void *arg)
     return NULL;
 }
 
-// Recorder function running in a separate thread
 void *recorder_thread(void *arg)
 {
     printf("Starting recording on device with COM port %s\n", COM_PORT);
@@ -157,35 +136,30 @@ void *recorder_thread(void *arg)
     return NULL;
 }
 
-// Main function
 int main(void)
 {
     snd_lib_error_set_handler(silent_alsa_error);
     setvbuf(stdout, NULL, _IOLBF, 0);
     setvbuf(stderr, NULL, _IOLBF, 0);
-    // Load configuration from .env file
+
     load_config(".env");
 
     pthread_t recorder_thread_id, monitor_thread_id;
 
-    // Send any existing files before monitoring starts
     send_existing_files(RECORDING_DIRECTORY);
 
-    // Create a thread for the recorder
     if (pthread_create(&recorder_thread_id, NULL, recorder_thread, NULL) != 0)
     {
         perror("Failed to create recorder thread");
         return 1;
     }
 
-    // Create a thread for directory monitoring using our dedicated loop
     if (pthread_create(&monitor_thread_id, NULL, monitor_directory_thread, (void *)RECORDING_DIRECTORY) != 0)
     {
         perror("Failed to create monitor thread");
         return 1;
     }
 
-    // Wait for both threads to finish (infinite loops here, so you'll likely signal termination externally)
     pthread_join(recorder_thread_id, NULL);
     pthread_join(monitor_thread_id, NULL);
 

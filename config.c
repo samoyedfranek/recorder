@@ -22,10 +22,9 @@ void load_config(const char *env_file)
     char line[256];
     while (fgets(line, sizeof(line), file))
     {
-        // Trim newlines and spaces
+
         line[strcspn(line, "\n")] = 0;
 
-        // Skip empty lines or comments
         if (line[0] == '#' || line[0] == '\0')
             continue;
 
@@ -38,7 +37,7 @@ void load_config(const char *env_file)
                 BOT_TOKEN = strdup(value);
             else if (strcmp(key, "CHAT_ID") == 0)
             {
-                // Parse chat IDs as a comma-separated list
+
                 int count = 0;
                 char *tmp = value;
                 while (*tmp)
@@ -49,22 +48,20 @@ void load_config(const char *env_file)
                 }
                 count++;
 
-                // Allocate memory for chat IDs
-                CHAT_IDS = (char **)malloc(sizeof(char *) * (count + 1)); // Allocate memory for chat IDs
+                CHAT_IDS = (char **)malloc(sizeof(char *) * (count + 1));
                 if (!CHAT_IDS)
                 {
                     fprintf(stderr, "Memory allocation failed for CHAT_IDS\n");
                     exit(1);
                 }
 
-                // Tokenize and store chat IDs
                 char *token = strtok(value, ",");
                 for (int i = 0; i < count; i++)
                 {
                     CHAT_IDS[i] = strdup(token);
                     token = strtok(NULL, ",");
                 }
-                CHAT_IDS[count] = NULL; // Null-terminate the array of chat IDs
+                CHAT_IDS[count] = NULL;
             }
             else if (strcmp(key, "COM_PORT") == 0)
                 COM_PORT = strdup(value);

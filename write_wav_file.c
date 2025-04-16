@@ -2,23 +2,23 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#include "h/open_serial_port.h"
 
-// WAV file header structure
 typedef struct
 {
-    char chunkID[4];      // "RIFF"
-    uint32_t chunkSize;   // File size - 8 bytes
-    char format[4];       // "WAVE"
-    char subchunk1ID[4];  // "fmt "
-    uint32_t subchunk1Size; // PCM header size (16 for PCM)
-    uint16_t audioFormat; // 1 for PCM
+    char chunkID[4];
+    uint32_t chunkSize;
+    char format[4];
+    char subchunk1ID[4];
+    uint32_t subchunk1Size;
+    uint16_t audioFormat;
     uint16_t numChannels;
     uint32_t sampleRate;
     uint32_t byteRate;
     uint16_t blockAlign;
     uint16_t bitsPerSample;
-    char subchunk2ID[4];  // "data"
-    uint32_t subchunk2Size; // Data size
+    char subchunk2ID[4];
+    uint32_t subchunk2Size;
 } WAVHeader;
 
 int write_wav_file(const char *filename, short *data, size_t numSamples, int sampleRate)

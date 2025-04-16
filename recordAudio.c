@@ -7,18 +7,17 @@
 #include <portaudio.h>
 #include "h/write_wav_file.h"
 #include "h/open_serial_port.h"
+#include "h/recordAudio.h"
 
-// --- Configuration Constants ---
 #define SAMPLE_RATE 48000
 #define CHANNELS 1
-#define CHUNK_SIZE 1024 // Frames per buffer
+#define CHUNK_SIZE 1024
 #define AMPLITUDE_THRESHOLD 300
-#define SILENCE_THRESHOLD 5   // Seconds of silence before stopping
-#define REMOVE_LAST_SECONDS 5 // Seconds to remove from the end of the recording
+#define SILENCE_THRESHOLD 5
+#define REMOVE_LAST_SECONDS 5
 
 #define RECORDINGS_DIR "./recordings"
 
-// --- Audio Data Structure ---
 typedef struct
 {
     short *buffer;
@@ -29,7 +28,6 @@ typedef struct
     char serial_name[256];
 } AudioData;
 
-// --- Audio Callback Function ---
 static int audioCallback(const void *inputBuffer, void *outputBuffer,
                          unsigned long framesPerBuffer,
                          const PaStreamCallbackTimeInfo *timeInfo,
@@ -54,8 +52,6 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
             max_amplitude = sample;
         }
     }
-
-    // printf("Frames captured: %lu, Max amplitude: %d\n", framesPerBuffer, max_amplitude);
 
     time_t current_time = time(NULL);
 
@@ -143,14 +139,12 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
     return paContinue;
 }
 
-// --- Recorder Function ---
 void recorder(const char *com_port)
 {
     PaError err;
     PaStream *stream;
     AudioData data = {0};
 
-    // Open serial port and fetch the name
     char *serial_name = open_serial_port(com_port);
     snprintf(data.serial_name, sizeof(data.serial_name), "%s", serial_name ? serial_name : "unknown");
 
@@ -179,7 +173,6 @@ void recorder(const char *com_port)
         return;
     }
 
-    // printf("Recording started. Press Ctrl+C to stop.\n");
     while (1)
     {
         sleep(1);

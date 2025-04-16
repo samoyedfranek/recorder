@@ -6,7 +6,6 @@
 #include <unistd.h>
 #include <libserialport.h>
 
-// Helper function to duplicate string
 static char *duplicate_string(const char *str)
 {
     char *dup = malloc(strlen(str) + 1);
@@ -15,21 +14,19 @@ static char *duplicate_string(const char *str)
     return dup;
 }
 
-// Function to remove leading spaces
 static char *remove_leading_spaces(char *str)
 {
     while (*str && isspace((unsigned char)*str))
-        str++; // Skip leading spaces
+        str++;
     return str;
 }
 
-// Function to remove unwanted characters
 static void remove_unwanted_characters(char *str)
 {
     int i = 0, j = 0;
     while (str[i])
     {
-        // Allow only letters and a space character
+
         if (isalpha((unsigned char)str[i]) || (isspace((unsigned char)str[i]) && i > 0 && str[i - 1] != ' '))
         {
             str[j++] = str[i];
@@ -39,13 +36,11 @@ static void remove_unwanted_characters(char *str)
     str[j] = '\0';
 }
 
-// Function to ensure the string starts with a letter
 static void ensure_start_with_letter(char *str)
 {
-    // Remove leading spaces
+
     char *cleaned = remove_leading_spaces(str);
 
-    // If it doesn't start with a letter, we can change it to "radio"
     if (!isalpha((unsigned char)cleaned[0]))
     {
         strcpy(str, "radio");
@@ -55,14 +50,12 @@ static void ensure_start_with_letter(char *str)
     strcpy(str, cleaned);
 }
 
-// Function to remove multiple spaces and only keep one space
 static void remove_extra_spaces(char *str)
 {
     int i = 0;
     int j = 0;
     int space_found = 0;
 
-    // Process each character
     while (str[i])
     {
         if (isspace((unsigned char)str[i]))
@@ -83,7 +76,6 @@ static void remove_extra_spaces(char *str)
     str[j] = '\0';
 }
 
-// Function to clean the string (only letters and one space)
 static void clean_string(char *str)
 {
     ensure_start_with_letter(str);
@@ -91,7 +83,6 @@ static void clean_string(char *str)
     remove_unwanted_characters(str);
 }
 
-// Function to remove suffix and everything after (AML, AM, LL, LM, L)
 static void remove_endings(char *str)
 {
     const char *endings[] = {"AML", "AM", "LL", "LM", "L"};
@@ -102,20 +93,18 @@ static void remove_endings(char *str)
         char *pos = strstr(str, endings[i]);
         if (pos != NULL)
         {
-            // Cut off the suffix and everything after
+
             *pos = '\0';
             break;
         }
     }
 }
 
-
 char *open_serial_port(const char *com_port)
 {
     struct sp_port *port;
     enum sp_return ret;
 
-    // Get the port by name
     ret = sp_get_port_by_name(com_port, &port);
     if (ret != SP_OK)
     {
@@ -123,7 +112,6 @@ char *open_serial_port(const char *com_port)
         return duplicate_string("radio");
     }
 
-    // Open the port for reading
     ret = sp_open(port, SP_MODE_READ);
     if (ret != SP_OK)
     {
@@ -132,7 +120,6 @@ char *open_serial_port(const char *com_port)
         return duplicate_string("radio");
     }
 
-    // Configure the port: set baud rate to 38400, 8N1
     ret = sp_set_baudrate(port, 38400);
     if (ret != SP_OK)
     {
@@ -153,7 +140,6 @@ char *open_serial_port(const char *com_port)
         return duplicate_string("radio");
     }
 
-    // Allocate a buffer for accumulating result
     char *result = malloc(1024);
     if (!result)
     {
@@ -163,11 +149,9 @@ char *open_serial_port(const char *com_port)
     }
     result[0] = '\0';
 
-    // Buffer for each read
     char buf[256];
     int bytes_read = 0;
 
-    // Loop until we detect marker "II" in our accumulated string.
     while (1)
     {
         ret = sp_nonblocking_read(port, buf, sizeof(buf) - 1);
@@ -181,7 +165,6 @@ char *open_serial_port(const char *com_port)
             bytes_read = ret;
             buf[bytes_read] = '\0';
 
-            // Filter out non-printable characters (only ASCII 32 to 126)
             char filtered[256];
             int j = 0;
             for (int i = 0; i < bytes_read; i++)
@@ -191,32 +174,27 @@ char *open_serial_port(const char *com_port)
             }
             filtered[j] = '\0';
 
-            // Append filtered data to result
             strncat(result, filtered, 1023 - strlen(result));
 
-            // Look for the marker "II"
             char *marker = strstr(result, "II");
             if (marker != NULL)
             {
-                marker += 2; // Skip "II"
+                marker += 2;
                 char extracted[1024];
                 strncpy(extracted, marker, sizeof(extracted) - 1);
                 extracted[sizeof(extracted) - 1] = '\0';
 
-                // Remove unwanted endings (AM, AML, L, LL)
                 remove_endings(extracted);
 
-                // Clean up the string
                 clean_string(extracted);
 
-                // Clean up and return result
                 sp_close(port);
                 sp_free_port(port);
                 free(result);
                 return duplicate_string(extracted);
             }
         }
-        // Sleep 100ms to avoid busy-waiting
+
         usleep(100000);
     }
 
