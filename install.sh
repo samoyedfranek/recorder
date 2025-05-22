@@ -5,8 +5,7 @@ set -e
 echo "🔄 Updating and installing dependencies..."
 
 sudo apt update -y && sudo apt upgrade -y
-sudo apt install -y build-essential portaudio19-dev libserialport-dev \
-     libcurl4-openssl-dev libuv1-dev libasound2-dev libjack-jackd2-dev git
+sudo apt install -y build-essential portaudio19-dev libcurl4-openssl-dev libserialport-dev libuv1-dev libasound2-dev libjack-jackd2-dev
 
 echo "✅ Dependencies installed."
 
