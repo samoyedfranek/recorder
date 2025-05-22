@@ -11,7 +11,7 @@ fi
 
 cd "$WORKDIR" || { echo "Failed to cd to $WORKDIR"; exit 1; }
 
-LOGFILE="$WORKDIR/recorder_build.log"
+LOGFILE="$WORKDIR/watchdog.log"
 
 # === Compile the recorder program ===
 echo "[$(date)] Compiling recorder..." | tee -a "$LOGFILE"
