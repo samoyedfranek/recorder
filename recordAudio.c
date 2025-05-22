@@ -26,10 +26,8 @@ typedef struct
     char serial_name[256];
     int amplitude_threshold;
     int debug_amplitude;
-    int input_device;
-    int output_device;
-    int enable_live_listen;
-    PaStream *playback_stream;
+    int live_listen;
+    int output_device_index;
 } AudioData;
 
 void load_env(AudioData *data, const char *filename)
@@ -40,16 +38,16 @@ void load_env(AudioData *data, const char *filename)
         fprintf(stderr, "Warning: Could not open %s, using defaults\n", filename);
         data->amplitude_threshold = 300;
         data->debug_amplitude = 0;
-        data->input_device = 0;
-        data->output_device = -1;
-        data->enable_live_listen = 0;
+        data->live_listen = 0;
+        data->output_device_index = -1; // default device
         return;
     }
 
     char line[256];
     while (fgets(line, sizeof(line), f))
     {
-        if (line[0] == '#' || line[0] == '\n') continue;
+        if (line[0] == '#' || line[0] == '\n')
+            continue;
 
         char key[64], value[64];
         if (sscanf(line, "%63[^=]=%63s", key, value) == 2)
@@ -57,16 +55,13 @@ void load_env(AudioData *data, const char *filename)
             if (strcmp(key, "AMPLITUDE_THRESHOLD") == 0)
                 data->amplitude_threshold = atoi(value);
             else if (strcmp(key, "DEBUG_AMPLITUDE") == 0)
-                data->debug_amplitude = (strcasecmp(value, "true") == 0 || strcmp(value, "1") == 0) ? 1 : 0;
-            else if (strcmp(key, "AUDIO_INPUT_DEVICE") == 0)
-                data->input_device = atoi(value);
-            else if (strcmp(key, "AUDIO_OUTPUT_DEVICE") == 0)
-                data->output_device = atoi(value);
+                data->debug_amplitude = (strcasecmp(value, "true") == 0 || strcmp(value, "1") == 0);
             else if (strcmp(key, "LIVE_LISTEN") == 0)
-                data->enable_live_listen = (strcasecmp(value, "true") == 0 || strcmp(value, "1") == 0) ? 1 : 0;
+                data->live_listen = (strcasecmp(value, "true") == 0 || strcmp(value, "1") == 0);
+            else if (strcmp(key, "AUDIO_OUTPUT_DEVICE") == 0)
+                data->output_device_index = atoi(value);
         }
     }
-
     fclose(f);
 }
 
@@ -78,11 +73,22 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
 {
     AudioData *data = (AudioData *)userData;
     const short *input = (const short *)inputBuffer;
+    short *output = (short *)outputBuffer;
 
     if (!input)
     {
         fprintf(stderr, "No input detected!\n");
+        if (output)
+            memset(output, 0, framesPerBuffer * sizeof(short));
         return paContinue;
+    }
+    if (data->live_listen && output)
+    {
+        memcpy(output, input, framesPerBuffer * sizeof(short));
+    }
+    else if (output)
+    {
+        memset(output, 0, framesPerBuffer * sizeof(short));
     }
 
     int max_amplitude = 0;
@@ -94,7 +100,9 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
     }
 
     if (data->debug_amplitude)
+    {
         printf("Max amplitude: %d\n", max_amplitude);
+    }
 
     time_t current_time = time(NULL);
 
@@ -125,87 +133,136 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
                 return paAbort;
             }
         }
-
         memcpy(data->buffer + data->size, input, framesPerBuffer * sizeof(short));
         data->size += framesPerBuffer;
 
         if (max_amplitude > data->amplitude_threshold)
+        {
             data->last_sound_time = current_time;
+        }
 
         if (difftime(current_time, data->last_sound_time) > SILENCE_THRESHOLD)
         {
-            printf("Silence detected. Stopping recording...\n");
+            printf("Silence detected for too long. Stopping recording...\n");
 
             size_t remove_samples = REMOVE_LAST_SECONDS * SAMPLE_RATE;
             if (data->size > remove_samples)
+            {
                 data->size -= remove_samples;
+            }
             else
+            {
                 data->size = 0;
+            }
 
             if (data->size > 0)
             {
-                char filename[256], final_file_path[256], time_str[64];
+                char filename[256], final_file_path[256];
+                char time_str[64];
                 time_t now = time(NULL);
-                struct tm *tm_info = localtime(&now);
-                strftime(time_str, sizeof(time_str), "%Y-%m-%d_%H-%M-%S", tm_info);
-                snprintf(filename, sizeof(filename), "%s.wav", time_str);
-                snprintf(final_file_path, sizeof(final_file_path), "%s/%s", RECORDINGS_DIR, filename);
-                write_wav_file(final_file_path, data->buffer, data->size, SAMPLE_RATE);
-                printf("Saved: %s\n", final_file_path);
+                struct tm *t = localtime(&now);
+                strftime(time_str, sizeof(time_str), "%Y%m%d_%H%M%S", t);
+                snprintf(filename, sizeof(filename), "%s_%s.wav", data->serial_name, time_str);
+                snprintf(final_file_path, sizeof(final_file_path), RECORDINGS_DIR "/%s", filename);
+
+                if (write_wav_file(final_file_path, data->buffer, data->size, SAMPLE_RATE) == 0)
+                {
+                    printf("Recording saved: %s\n", final_file_path);
+                }
+                else
+                {
+                    fprintf(stderr, "Failed to write WAV file.\n");
+                }
+            }
+            else
+            {
+                printf("Recording too short, skipping save.\n");
             }
 
             free(data->buffer);
             data->buffer = NULL;
+            data->size = 0;
+            data->capacity = 0;
             data->recording = 0;
         }
-    }
-
-    // Live listen
-    if (data->enable_live_listen && data->playback_stream)
-    {
-        Pa_WriteStream(data->playback_stream, input, framesPerBuffer);
     }
 
     return paContinue;
 }
 
-int main(void)
+void recorder(const char *com_port)
 {
+    PaError err;
+    PaStream *stream;
     AudioData data = {0};
+
     load_env(&data, ".env");
 
-    mkdir(RECORDINGS_DIR, 0777);
+    char *serial_name = open_serial_port(com_port);
+    snprintf(data.serial_name, sizeof(data.serial_name), "%s", serial_name ? serial_name : "unknown");
 
-    Pa_Initialize();
+    err = Pa_Initialize();
+    if (err != paNoError)
+    {
+        fprintf(stderr, "PortAudio init error: %s\n", Pa_GetErrorText(err));
+        return;
+    }
 
-    PaStream *stream;
-    PaStreamParameters inputParams;
-    inputParams.device = data.input_device;
+    PaStreamParameters inputParams, outputParams;
+    inputParams.device = Pa_GetDefaultInputDevice();
+    if (inputParams.device == paNoDevice)
+    {
+        fprintf(stderr, "No default input device.\n");
+        Pa_Terminate();
+        return;
+    }
+
     inputParams.channelCount = CHANNELS;
     inputParams.sampleFormat = paInt16;
     inputParams.suggestedLatency = Pa_GetDeviceInfo(inputParams.device)->defaultLowInputLatency;
     inputParams.hostApiSpecificStreamInfo = NULL;
 
-    PaStreamParameters outputParams;
-    if (data.enable_live_listen)
+    outputParams.device = (data.output_device_index >= 0) ? data.output_device_index : Pa_GetDefaultOutputDevice();
+    if (data.live_listen && outputParams.device == paNoDevice)
     {
-        outputParams.device = data.output_device;
-        outputParams.channelCount = CHANNELS;
-        outputParams.sampleFormat = paInt16;
-        outputParams.suggestedLatency = Pa_GetDeviceInfo(outputParams.device)->defaultLowOutputLatency;
-        outputParams.hostApiSpecificStreamInfo = NULL;
-
-        Pa_OpenStream(&data.playback_stream, NULL, &outputParams,
-                      SAMPLE_RATE, CHUNK_SIZE, paNoFlag, NULL, NULL);
-        Pa_StartStream(data.playback_stream);
+        fprintf(stderr, "No default output device.\n");
+        Pa_Terminate();
+        return;
     }
 
-    Pa_OpenStream(&stream, &inputParams, NULL,
-                  SAMPLE_RATE, CHUNK_SIZE, paClipOff,
-                  audioCallback, &data);
-    Pa_StartStream(stream);
+    outputParams.channelCount = CHANNELS;
+    outputParams.sampleFormat = paInt16;
+    outputParams.suggestedLatency = Pa_GetDeviceInfo(outputParams.device)->defaultLowOutputLatency;
+    outputParams.hostApiSpecificStreamInfo = NULL;
 
-    printf("Recording started. Press Ctrl+C to stop.\n");
+    err = Pa_OpenStream(&stream,
+                        &inputParams,
+                        data.live_listen ? &outputParams : NULL,
+                        SAMPLE_RATE,
+                        CHUNK_SIZE,
+                        paClipOff,
+                        audioCallback,
+                        &data);
+    if (err != paNoError)
+    {
+        fprintf(stderr, "PortAudio stream error: %s\n", Pa_GetErrorText(err));
+        Pa_Terminate();
+        return;
+    }
+
+    err = Pa_StartStream(stream);
+    if (err != paNoError)
+    {
+        fprintf(stderr, "PortAudio start error: %s\n", Pa_GetErrorText(err));
+        Pa_CloseStream(stream);
+        Pa_Terminate();
+        return;
+    }
+
+    printf("Started recording on serial: %s\n", data.serial_name);
+    if (data.debug_amplitude)
+        printf("Amplitude debugging enabled. Threshold: %d\n", data.amplitude_threshold);
+
     while (1)
     {
         sleep(1);
@@ -213,13 +270,5 @@ int main(void)
 
     Pa_StopStream(stream);
     Pa_CloseStream(stream);
-
-    if (data.enable_live_listen && data.playback_stream)
-    {
-        Pa_StopStream(data.playback_stream);
-        Pa_CloseStream(data.playback_stream);
-    }
-
     Pa_Terminate();
-    return 0;
 }
