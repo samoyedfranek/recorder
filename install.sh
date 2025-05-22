@@ -40,7 +40,7 @@ echo "🔧 Compiling recorder..."
 gcc -o "$SCRIPT_DIR/recorder" main.c open_serial_port.c recordAudio.c \
     telegramSend.c config.c write_wav_file.c \
     -lportaudio -lm -lserialport -lpthread -lcurl -luv -lasound -ljack \
-    | tee "$SCRIPT_DIR/recorder_build.log"
+    | tee "$SCRIPT_DIR/watchdog.log"
 echo "✅ Compilation complete."
 
 # === Make watchdog executable ===
