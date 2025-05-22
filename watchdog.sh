@@ -11,14 +11,16 @@ fi
 
 cd "$WORKDIR" || { echo "Failed to cd to $WORKDIR"; exit 1; }
 
+LOGFILE="$WORKDIR/recorder_build.log"
+
 # === Compile the recorder program ===
-echo "[$(date)] Compiling recorder..."
-gcc -o recorder main.c open_serial_port.c recordAudio.c telegramSend.c config.c write_wav_file.c -lportaudio -lm -lserialport -lpthread -lcurl -luv -lasound -ljack
-if [ $? -ne 0 ]; then
-    echo "[$(date)] Compilation failed. Exiting."
+echo "[$(date)] Compiling recorder..." | tee -a "$LOGFILE"
+if ! gcc -o recorder main.c open_serial_port.c recordAudio.c telegramSend.c config.c write_wav_file.c \
+    -lportaudio -lm -lserialport -lpthread -lcurl -luv -lasound -ljack 2>&1 | tee -a "$LOGFILE"; then
+    echo "[$(date)] Compilation failed. See $LOGFILE for details." | tee -a "$LOGFILE"
     exit 1
 fi
-echo "[$(date)] Compilation succeeded."
+echo "[$(date)] Compilation succeeded." | tee -a "$LOGFILE"
 
 # === Function to get Git commit hashes ===
 get_hashes() {
@@ -49,13 +51,13 @@ while true; do
         fi
 
         # Re-compile after pulling new code
-        echo "[$(date)] Recompiling recorder after git pull..."
-        gcc -o recorder main.c open_serial_port.c recordAudio.c telegramSend.c config.c write_wav_file.c -lportaudio -lm -lserialport -lpthread -lcurl -luv -lasound -ljack
-        if [ $? -ne 0 ]; then
-            echo "[$(date)] Compilation failed after pull. Exiting."
+        echo "[$(date)] Recompiling recorder after git pull..." | tee -a "$LOGFILE"
+        if ! gcc -o recorder main.c open_serial_port.c recordAudio.c telegramSend.c config.c write_wav_file.c \
+            -lportaudio -lm -lserialport -lpthread -lcurl -luv -lasound -ljack 2>&1 | tee -a "$LOGFILE"; then
+            echo "[$(date)] Compilation failed after pull. See $LOGFILE for details." | tee -a "$LOGFILE"
             exit 1
         fi
-        echo "[$(date)] Compilation succeeded after pull."
+        echo "[$(date)] Compilation succeeded after pull." | tee -a "$LOGFILE"
 
         # Restart
         $RECORDER_CMD 2>/dev/null &
