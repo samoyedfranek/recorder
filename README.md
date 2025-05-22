@@ -27,6 +27,8 @@ USER_NAME=fhadz
 WORKDIR=/home/fhadz/recorder
 RECORDER_CMD=/home/fhadz/recorder/recorder
 REPO_BRANCH=main
+AMPLITUDE_THRESHOLD=300
+DEBUG_AMPLITUDE=true
 ```
 
 Replace the values with your actual configuration.

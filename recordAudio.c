@@ -12,10 +12,8 @@
 #define SAMPLE_RATE 48000
 #define CHANNELS 1
 #define CHUNK_SIZE 1024
-#define AMPLITUDE_THRESHOLD 300
 #define SILENCE_THRESHOLD 5
 #define REMOVE_LAST_SECONDS 5
-
 #define RECORDINGS_DIR "./recordings"
 
 typedef struct
@@ -26,7 +24,38 @@ typedef struct
     int recording;
     time_t last_sound_time;
     char serial_name[256];
+    int amplitude_threshold;
+    int debug_amplitude;
 } AudioData;
+
+// Load only AMPLITUDE_THRESHOLD and DEBUG_AMPLITUDE from .env file
+void load_env(AudioData *data, const char *filename)
+{
+    FILE *f = fopen(filename, "r");
+    if (!f)
+    {
+        fprintf(stderr, "Warning: Could not open %s, using defaults\n", filename);
+        data->amplitude_threshold = 300; // default threshold
+        data->debug_amplitude = 0;       // default no debug logging
+        return;
+    }
+
+    char line[256];
+    while (fgets(line, sizeof(line), f))
+    {
+        if (line[0] == '#' || line[0] == '\n') continue;
+
+        char key[64], value[64];
+        if (sscanf(line, "%63[^=]=%63s", key, value) == 2)
+        {
+            if (strcmp(key, "AMPLITUDE_THRESHOLD") == 0)
+                data->amplitude_threshold = atoi(value);
+            else if (strcmp(key, "DEBUG_AMPLITUDE") == 0)
+                data->debug_amplitude = (strcasecmp(value, "true") == 0 || strcmp(value, "1") == 0) ? 1 : 0;
+        }
+    }
+    fclose(f);
+}
 
 static int audioCallback(const void *inputBuffer, void *outputBuffer,
                          unsigned long framesPerBuffer,
@@ -48,14 +77,17 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
     {
         int sample = abs(input[i]);
         if (sample > max_amplitude)
-        {
             max_amplitude = sample;
-        }
+    }
+
+    if (data->debug_amplitude)
+    {
+        printf("Max amplitude: %d\n", max_amplitude);
     }
 
     time_t current_time = time(NULL);
 
-    if (max_amplitude > AMPLITUDE_THRESHOLD && !data->recording)
+    if (max_amplitude > data->amplitude_threshold && !data->recording)
     {
         printf("Recording started.\n");
         data->recording = 1;
@@ -85,7 +117,7 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
         memcpy(data->buffer + data->size, input, framesPerBuffer * sizeof(short));
         data->size += framesPerBuffer;
 
-        if (max_amplitude > AMPLITUDE_THRESHOLD)
+        if (max_amplitude > data->amplitude_threshold)
         {
             data->last_sound_time = current_time;
         }
@@ -145,6 +177,8 @@ void recorder(const char *com_port)
     PaStream *stream;
     AudioData data = {0};
 
+    load_env(&data, ".env");
+
     char *serial_name = open_serial_port(com_port);
     snprintf(data.serial_name, sizeof(data.serial_name), "%s", serial_name ? serial_name : "unknown");
 
@@ -172,6 +206,10 @@ void recorder(const char *com_port)
         Pa_Terminate();
         return;
     }
+
+    printf("Started recording on serial: %s\n", data.serial_name);
+    if (data.debug_amplitude)
+        printf("Amplitude debugging enabled. Threshold: %d\n", data.amplitude_threshold);
 
     while (1)
     {
