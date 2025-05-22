@@ -9,7 +9,16 @@ else
     exit 1
 fi
 
-cd "$WORKDIR" || exit 1
+cd "$WORKDIR" || { echo "Failed to cd to $WORKDIR"; exit 1; }
+
+# === Compile the recorder program ===
+echo "[$(date)] Compiling recorder..."
+gcc -o recorder main.c open_serial_port.c recordAudio.c telegramSend.c config.c write_wav_file.c -lportaudio -lm -lserialport -lpthread -lcurl -luv -lasound -ljack
+if [ $? -ne 0 ]; then
+    echo "[$(date)] Compilation failed. Exiting."
+    exit 1
+fi
+echo "[$(date)] Compilation succeeded."
 
 # === Function to get Git commit hashes ===
 get_hashes() {
@@ -38,6 +47,15 @@ while true; do
             kill $RECORDER_PID
             wait $RECORDER_PID 2>/dev/null
         fi
+
+        # Re-compile after pulling new code
+        echo "[$(date)] Recompiling recorder after git pull..."
+        gcc -o recorder main.c open_serial_port.c recordAudio.c telegramSend.c config.c write_wav_file.c -lportaudio -lm -lserialport -lpthread -lcurl -luv -lasound -ljack
+        if [ $? -ne 0 ]; then
+            echo "[$(date)] Compilation failed after pull. Exiting."
+            exit 1
+        fi
+        echo "[$(date)] Compilation succeeded after pull."
 
         # Restart
         $RECORDER_CMD 2>/dev/null &
