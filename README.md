@@ -23,12 +23,14 @@ CHAT_ID=xxxxxxxxxxx,xxxxxxxxxxxx,xxxxxxxx
 COM_PORT=/dev/ttyACM0
 RECORDING_DIRECTORY=./recordings
 AUDIO_INPUT_DEVICE=0
+AUDIO_OUTPUT_DEVICE=0
 USER_NAME=fhadz
 WORKDIR=/home/fhadz/recorder
 RECORDER_CMD=/home/fhadz/recorder/recorder
 REPO_BRANCH=main
 AMPLITUDE_THRESHOLD=300
 DEBUG_AMPLITUDE=true
+LIVE_LISTEN=true
 ```
 
 Replace the values with your actual configuration.
