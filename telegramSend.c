@@ -7,6 +7,31 @@
 #include <stdio.h>
 #include <errno.h>
 
+// Reads a value from .env file by key, returns 1 if found, 0 otherwise
+int get_env_value(const char *filename, const char *key, char *value, size_t value_size) {
+    FILE *file = fopen(filename, "r");
+    if (!file) return 0;
+
+    char line[512];
+    size_t key_len = strlen(key);
+
+    while (fgets(line, sizeof(line), file)) {
+        if (strncmp(line, key, key_len) == 0 && line[key_len] == '=') {
+            char *start = line + key_len + 1;
+            char *end = strchr(start, '\n');
+            if (end) *end = '\0';
+
+            strncpy(value, start, value_size - 1);
+            value[value_size - 1] = '\0';
+            fclose(file);
+            return 1;
+        }
+    }
+
+    fclose(file);
+    return 0;
+}
+
 void get_current_datetime(char *datetime_str, size_t size)
 {
     time_t now = time(NULL);
@@ -15,6 +40,7 @@ void get_current_datetime(char *datetime_str, size_t size)
 }
 
 void escape_markdown_v2(char *dest, const char *src, size_t size);
+
 void extract_timestamp(const char *file_path, char *base_name, char *timestamp, size_t base_size, size_t time_size)
 {
     const char *pattern = "(.+)_([0-9]{8}_[0-9]{6})\\.wav$";
@@ -29,7 +55,6 @@ void extract_timestamp(const char *file_path, char *base_name, char *timestamp, 
 
     if (regexec(&regex, file_path, 3, matches, 0) == 0)
     {
-
         snprintf(base_name, base_size, "%.*s", (int)(matches[1].rm_eo - matches[1].rm_so), file_path + matches[1].rm_so);
 
         snprintf(timestamp, time_size, "%.*s", (int)(matches[2].rm_eo - matches[2].rm_so), file_path + matches[2].rm_so);
@@ -46,7 +71,6 @@ void extract_timestamp(const char *file_path, char *base_name, char *timestamp, 
     }
     else
     {
-
         strncpy(base_name, file_path, base_size - 1);
         base_name[base_size - 1] = '\0';
         timestamp[0] = '\0';
@@ -62,6 +86,10 @@ int send_to_telegram(const char *file_path, const char *bot_token, char **chat_i
     char url[256];
     char base_name[256];
     char timestamp[32];
+
+    // Read extra text from .env
+    char extra_text[256] = "";
+    get_env_value(".env", "EXTRA_TEXT", extra_text, sizeof(extra_text));
 
     extract_timestamp(file_path, base_name, timestamp, sizeof(base_name), sizeof(timestamp));
 
@@ -98,13 +126,24 @@ int send_to_telegram(const char *file_path, const char *bot_token, char **chat_i
         curl_mime_name(part, "chat_id");
         curl_mime_data(part, chat_ids[i], CURL_ZERO_TERMINATED);
 
-        char escaped_caption[512];
         if (timestamp[0] != '\0')
         {
+            char escaped_caption[512];
             escape_markdown_v2(escaped_caption, timestamp, sizeof(escaped_caption));
 
-            char caption[512];
-            snprintf(caption, sizeof(caption), "%s\n*COŚ SIĘ DZIEJE*", escaped_caption);
+            // Append extra_text if available
+            char escaped_extra[256] = "";
+            if (extra_text[0] != '\0')
+            {
+                escape_markdown_v2(escaped_extra, extra_text, sizeof(escaped_extra));
+            }
+
+            char caption[1024];
+            if (escaped_extra[0] != '\0') {
+                snprintf(caption, sizeof(caption), "%s\n*COŚ SIĘ DZIEJE*\n%s", escaped_caption, escaped_extra);
+            } else {
+                snprintf(caption, sizeof(caption), "%s\n*COŚ SIĘ DZIEJE*", escaped_caption);
+            }
 
             part = curl_mime_addpart(mime);
             curl_mime_name(part, "caption");
@@ -143,7 +182,6 @@ void escape_markdown_v2(char *dest, const char *src, size_t size)
     size_t i = 0, j = 0;
     while (src[i] != '\0' && j < size - 1)
     {
-
         if (src[i] == '_' || src[i] == '*' || src[i] == '`' || src[i] == '[' || src[i] == ']' ||
             src[i] == '(' || src[i] == ')' || src[i] == '>' || src[i] == '#' || src[i] == '+' ||
             src[i] == '-' || src[i] == '.' || src[i] == '!')
@@ -170,8 +208,21 @@ int send_telegram_status(const char *bot_token, char **chat_ids, const char *mes
     struct curl_slist *headers = NULL;
     char url[256];
     char message_escaped[1024];
+    char extra_text[256] = "";
 
-    escape_markdown_v2(message_escaped, message, sizeof(message_escaped));
+    // Read extra text from .env
+    get_env_value(".env", "EXTRA_TEXT", extra_text, sizeof(extra_text));
+
+    // Append extra_text to the message if available
+    char full_message[1280];
+    if (extra_text[0] != '\0') {
+        snprintf(full_message, sizeof(full_message), "%s\n%s", message, extra_text);
+    } else {
+        strncpy(full_message, message, sizeof(full_message) - 1);
+        full_message[sizeof(full_message) - 1] = '\0';
+    }
+
+    escape_markdown_v2(message_escaped, full_message, sizeof(message_escaped));
 
     if (strlen(message_escaped) == 0)
     {
