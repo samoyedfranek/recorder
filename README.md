@@ -31,6 +31,7 @@ REPO_BRANCH=main
 AMPLITUDE_THRESHOLD=300
 DEBUG_AMPLITUDE=true
 LIVE_LISTEN=true
+EXTRA_TEXT=ez
 ```
 
 Replace the values with your actual configuration.
