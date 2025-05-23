@@ -6,9 +6,31 @@
 #include <regex.h>
 #include <stdio.h>
 #include <errno.h>
-#include "h/config.h"
 
-load_config(".env");
+// Reads a value from .env file by key, returns 1 if found, 0 otherwise
+int get_env_value(const char *filename, const char *key, char *value, size_t value_size) {
+    FILE *file = fopen(filename, "r");
+    if (!file) return 0;
+
+    char line[512];
+    size_t key_len = strlen(key);
+
+    while (fgets(line, sizeof(line), file)) {
+        if (strncmp(line, key, key_len) == 0 && line[key_len] == '=') {
+            char *start = line + key_len + 1;
+            char *end = strchr(start, '\n');
+            if (end) *end = '\0';
+
+            strncpy(value, start, value_size - 1);
+            value[value_size - 1] = '\0';
+            fclose(file);
+            return 1;
+        }
+    }
+
+    fclose(file);
+    return 0;
+}
 
 void get_current_datetime(char *datetime_str, size_t size)
 {
@@ -117,12 +139,9 @@ int send_to_telegram(const char *file_path, const char *bot_token, char **chat_i
             }
 
             char caption[1024];
-            if (escaped_extra[0] != '\0')
-            {
+            if (escaped_extra[0] != '\0') {
                 snprintf(caption, sizeof(caption), "%s\n*COŚ SIĘ DZIEJE*\n%s", escaped_caption, escaped_extra);
-            }
-            else
-            {
+            } else {
                 snprintf(caption, sizeof(caption), "%s\n*COŚ SIĘ DZIEJE*", escaped_caption);
             }
 
@@ -196,12 +215,9 @@ int send_telegram_status(const char *bot_token, char **chat_ids, const char *mes
 
     // Append extra_text to the message if available
     char full_message[1280];
-    if (extra_text[0] != '\0')
-    {
+    if (extra_text[0] != '\0') {
         snprintf(full_message, sizeof(full_message), "%s\n%s", message, extra_text);
-    }
-    else
-    {
+    } else {
         strncpy(full_message, message, sizeof(full_message) - 1);
         full_message[sizeof(full_message) - 1] = '\0';
     }
