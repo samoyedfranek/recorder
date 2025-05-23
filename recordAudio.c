@@ -26,8 +26,6 @@ typedef struct
     char serial_name[256];
     int amplitude_threshold;
     int debug_amplitude;
-    int live_listen;
-    int output_device_index;
 } AudioData;
 
 void load_env(AudioData *data, const char *filename)
@@ -38,8 +36,6 @@ void load_env(AudioData *data, const char *filename)
         fprintf(stderr, "Warning: Could not open %s, using defaults\n", filename);
         data->amplitude_threshold = 300;
         data->debug_amplitude = 0;
-        data->live_listen = 0;
-        data->output_device_index = -1; // default device
         return;
     }
 
@@ -56,10 +52,6 @@ void load_env(AudioData *data, const char *filename)
                 data->amplitude_threshold = atoi(value);
             else if (strcmp(key, "DEBUG_AMPLITUDE") == 0)
                 data->debug_amplitude = (strcasecmp(value, "true") == 0 || strcmp(value, "1") == 0);
-            else if (strcmp(key, "LIVE_LISTEN") == 0)
-                data->live_listen = (strcasecmp(value, "true") == 0 || strcmp(value, "1") == 0);
-            else if (strcmp(key, "AUDIO_OUTPUT_DEVICE") == 0)
-                data->output_device_index = atoi(value);
         }
     }
     fclose(f);
