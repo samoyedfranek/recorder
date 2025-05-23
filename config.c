@@ -1,16 +1,17 @@
-#include <ctype.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include "h/config.h"
 
-int LIVE_LISTEN = 0;  // Add this global variable in your config.h or above load_config
-
-// Helper to lowercase a string in-place
-void str_to_lower(char *str)
-{
-    for (; *str; ++str)
-        *str = (char)tolower(*str);
-}
+char *BOT_TOKEN = NULL;
+char *COM_PORT = NULL;
+char *RECORDING_DIRECTORY = NULL;
+int AUDIO_INPUT_DEVICE = 0;
+char **CHAT_IDS = NULL;
 
 void load_config(const char *env_file)
 {
+
     FILE *file = fopen(env_file, "r");
     if (!file)
     {
@@ -21,6 +22,7 @@ void load_config(const char *env_file)
     char line[256];
     while (fgets(line, sizeof(line), file))
     {
+
         line[strcspn(line, "\n")] = 0;
 
         if (line[0] == '#' || line[0] == '\0')
@@ -35,6 +37,7 @@ void load_config(const char *env_file)
                 BOT_TOKEN = strdup(value);
             else if (strcmp(key, "CHAT_ID") == 0)
             {
+
                 int count = 0;
                 char *tmp = value;
                 while (*tmp)
@@ -66,19 +69,6 @@ void load_config(const char *env_file)
                 RECORDING_DIRECTORY = strdup(value);
             else if (strcmp(key, "AUDIO_INPUT_DEVICE") == 0)
                 AUDIO_INPUT_DEVICE = atoi(value);
-            else if (strcmp(key, "AUDIO_OUTPUT_DEVICE") == 0)
-                AUDIO_OUTPUT_DEVICE = strdup(value);
-            else if (strcmp(key, "LIVE_LISTEN") == 0)
-            {
-                // lowercase value for case-insensitive compare
-                str_to_lower(value);
-                if (strcmp(value, "true") == 0 || strcmp(value, "1") == 0)
-                    LIVE_LISTEN = 1;
-                else if (strcmp(value, "false") == 0 || strcmp(value, "0") == 0)
-                    LIVE_LISTEN = 0;
-                else
-                    fprintf(stderr, "Warning: Invalid LIVE_LISTEN value: %s. Using default 0.\n", value);
-            }
         }
     }
 
