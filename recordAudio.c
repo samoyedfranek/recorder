@@ -8,6 +8,7 @@
 #include "h/write_wav_file.h"
 #include "h/open_serial_port.h"
 #include "h/recordAudio.h"
+#include "h/config.h"
 
 #define SAMPLE_RATE 48000
 #define CHANNELS 1
@@ -28,34 +29,7 @@ typedef struct
     int debug_amplitude;
 } AudioData;
 
-void load_env(AudioData *data, const char *filename)
-{
-    FILE *f = fopen(filename, "r");
-    if (!f)
-    {
-        fprintf(stderr, "Warning: Could not open %s, using defaults\n", filename);
-        data->amplitude_threshold = 300;
-        data->debug_amplitude = 0;
-        return;
-    }
-
-    char line[256];
-    while (fgets(line, sizeof(line), f))
-    {
-        if (line[0] == '#' || line[0] == '\n')
-            continue;
-
-        char key[64], value[64];
-        if (sscanf(line, "%63[^=]=%63s", key, value) == 2)
-        {
-            if (strcmp(key, "AMPLITUDE_THRESHOLD") == 0)
-                data->amplitude_threshold = atoi(value);
-            else if (strcmp(key, "DEBUG_AMPLITUDE") == 0)
-                data->debug_amplitude = (strcasecmp(value, "true") == 0 || strcmp(value, "1") == 0);
-        }
-    }
-    fclose(f);
-}
+load_config(".env");
 
 static int audioCallback(const void *inputBuffer, void *outputBuffer,
                          unsigned long framesPerBuffer,
