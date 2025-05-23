@@ -14,6 +14,8 @@
 #include "h/recordAudio.h"
 #include "h/config.h"
 
+load_config(".env");
+
 static void silent_alsa_error(const char *file, int line, const char *function,
                               int err, const char *fmt, ...) {}
 
@@ -158,8 +160,6 @@ int main(void)
     snd_lib_error_set_handler(silent_alsa_error);
     setvbuf(stdout, NULL, _IOLBF, 0);
     setvbuf(stderr, NULL, _IOLBF, 0);
-
-    load_config(".env");
 
     if (create_directory_if_not_exists(RECORDING_DIRECTORY) != 0)
     {
