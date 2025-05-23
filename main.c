@@ -14,11 +14,14 @@
 #include "h/recordAudio.h"
 #include "h/config.h"
 
-static void silent_alsa_error(const char *file, int line, const char *function,
-                              int err, const char *fmt, ...) {}
+#define MAX_QUEUE_SIZE 100
+char *playback_queue[MAX_QUEUE_SIZE];
+int queue_start = 0, queue_end = 0;
+pthread_mutex_t queue_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t queue_cond = PTHREAD_COND_INITIALIZER;
 
+static void silent_alsa_error(const char *file, int line, const char *function, int err, const char *fmt, ...) {}
 static void silent_jack_error(const char *msg) {}
-
 static void silent_jack_info(const char *msg) {}
 
 __attribute__((constructor)) static void suppress_audio_errors(void)
@@ -43,41 +46,35 @@ int create_directory_if_not_exists(const char *dir_path)
     return 0;
 }
 
-void send_existing_files(const char *directory)
+void enqueue_file_for_playback(const char *filepath)
 {
-    DIR *dir;
-    struct dirent *entry;
-
-    if ((dir = opendir(directory)) == NULL)
+    pthread_mutex_lock(&queue_mutex);
+    int next = (queue_end + 1) % MAX_QUEUE_SIZE;
+    if (next != queue_start)
     {
-        perror("Failed to open directory");
-        return;
+        playback_queue[queue_end] = strdup(filepath);
+        queue_end = next;
+        pthread_cond_signal(&queue_cond);
+    }
+    else
+    {
+        fprintf(stderr, "Playback queue is full. Dropping file: %s\n", filepath);
+    }
+    pthread_mutex_unlock(&queue_mutex);
+}
+
+char *dequeue_file_for_playback()
+{
+    pthread_mutex_lock(&queue_mutex);
+    while (queue_start == queue_end)
+    {
+        pthread_cond_wait(&queue_cond, &queue_mutex);
     }
 
-    while ((entry = readdir(dir)) != NULL)
-    {
-        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
-            continue;
-
-        char file_path[512];
-        snprintf(file_path, sizeof(file_path), "%s/%s", directory, entry->d_name);
-
-        struct stat file_stat;
-        if (stat(file_path, &file_stat) == 0)
-        {
-            if (S_ISREG(file_stat.st_mode))
-            {
-                printf("Sending existing file: %s\n", file_path);
-                send_to_telegram(file_path, BOT_TOKEN, CHAT_IDS);
-            }
-        }
-        else
-        {
-            perror("Error retrieving file info");
-        }
-    }
-
-    closedir(dir);
+    char *filepath = playback_queue[queue_start];
+    queue_start = (queue_start + 1) % MAX_QUEUE_SIZE;
+    pthread_mutex_unlock(&queue_mutex);
+    return filepath;
 }
 
 void on_new_file_created(uv_fs_event_t *handle, const char *filename, int events, int status)
@@ -87,7 +84,6 @@ void on_new_file_created(uv_fs_event_t *handle, const char *filename, int events
 
     if ((events & UV_RENAME) || (events & UV_CHANGE))
     {
-
         const char *directory = (const char *)handle->data;
         char full_path[512];
         snprintf(full_path, sizeof(full_path), "%s/%s", directory, filename);
@@ -96,13 +92,10 @@ void on_new_file_created(uv_fs_event_t *handle, const char *filename, int events
 
         struct stat file_stat;
         if (stat(full_path, &file_stat) != 0 || !S_ISREG(file_stat.st_mode))
-        {
-
             return;
-        }
 
         printf("New file detected: %s\n", full_path);
-        send_to_telegram(full_path, BOT_TOKEN, CHAT_IDS);
+        enqueue_file_for_playback(full_path);
     }
 }
 
@@ -145,6 +138,50 @@ void *monitor_directory_thread(void *arg)
     return NULL;
 }
 
+void *playback_thread(void *arg)
+{
+    (void)arg;
+
+    create_directory_if_not_exists("./play");
+
+    while (1)
+    {
+        char *filepath = dequeue_file_for_playback();
+        if (!filepath)
+            continue;
+
+        char filename[256];
+        snprintf(filename, sizeof(filename), "%s", strrchr(filepath, '/') + 1);
+
+        char playpath[512];
+        snprintf(playpath, sizeof(playpath), "./play/%s", filename);
+
+        char copy_cmd[1024];
+        snprintf(copy_cmd, sizeof(copy_cmd), "cp '%s' '%s'", filepath, playpath);
+        if (system(copy_cmd) != 0)
+        {
+            fprintf(stderr, "Failed to copy %s to %s\n", filepath, playpath);
+            free(filepath);
+            continue;
+        }
+
+        char play_cmd[1024];
+        snprintf(play_cmd, sizeof(play_cmd), "aplay -D plughw:%s '%s'", AUDIO_OUTPUT_DEVICE, playpath);
+        if (system(play_cmd) != 0)
+        {
+            fprintf(stderr, "Playback failed for %s\n", playpath);
+        }
+        else
+        {
+            printf("Playback finished: %s\n", playpath);
+            unlink(playpath);
+        }
+
+        free(filepath);
+    }
+    return NULL;
+}
+
 void *recorder_thread(void *arg)
 {
     printf("Starting recording on device with COM port %s\n", COM_PORT);
@@ -155,7 +192,7 @@ void *recorder_thread(void *arg)
 
 int main(void)
 {
-    snd_lib_error_set_handler(silent_alsa_error);
+    suppress_audio_errors();
     setvbuf(stdout, NULL, _IOLBF, 0);
     setvbuf(stderr, NULL, _IOLBF, 0);
 
@@ -166,25 +203,31 @@ int main(void)
         return 1;
     }
 
-    pthread_t recorder_thread_id, monitor_thread_id;
+    pthread_t recorder_thread_id, monitor_thread_id, playback_thread_id;
 
-    send_existing_files(RECORDING_DIRECTORY);
-
-    if (pthread_create(&recorder_thread_id, NULL, recorder_thread, NULL) != 0)
+    if (pthread_create(&recorder_thread_id, NULL, recorder_thread, NULL) != 0 ||
+        pthread_create(&monitor_thread_id, NULL, monitor_directory_thread, (void *)RECORDING_DIRECTORY) != 0)
     {
-        perror("Failed to create recorder thread");
+        perror("Failed to create thread");
         return 1;
     }
 
-    if (pthread_create(&monitor_thread_id, NULL, monitor_directory_thread, (void *)RECORDING_DIRECTORY) != 0)
+    if (LIVE_LISTEN)
     {
-        perror("Failed to create monitor thread");
-        return 1;
+        if (pthread_create(&playback_thread_id, NULL, playback_thread, NULL) != 0)
+        {
+            perror("Failed to create playback thread");
+            return 1;
+        }
     }
 
     pthread_join(recorder_thread_id, NULL);
     pthread_join(monitor_thread_id, NULL);
 
-    printf("All files processed successfully.\n");
+    if (LIVE_LISTEN)
+    {
+        pthread_join(playback_thread_id, NULL);
+    }
+
     return 0;
 }

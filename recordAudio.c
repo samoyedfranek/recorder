@@ -26,11 +26,8 @@ typedef struct
     char serial_name[256];
     int amplitude_threshold;
     int debug_amplitude;
-    int live_listen;
-    int output_device_index;
     int chunk_size;
 } AudioData;
-
 
 void load_env(AudioData *data, const char *filename)
 {
@@ -40,13 +37,11 @@ void load_env(AudioData *data, const char *filename)
         fprintf(stderr, "Warning: Could not open %s, using defaults\n", filename);
         data->amplitude_threshold = 300;
         data->debug_amplitude = 0;
-        data->live_listen = 0;
-        data->output_device_index = -1;
-        data->chunk_size = 1024;       
+        data->chunk_size = 1024;
         return;
     }
 
-    data->chunk_size = 1024; 
+    data->chunk_size = 1024;
 
     char line[256];
     while (fgets(line, sizeof(line), f))
@@ -61,17 +56,12 @@ void load_env(AudioData *data, const char *filename)
                 data->amplitude_threshold = atoi(value);
             else if (strcmp(key, "DEBUG_AMPLITUDE") == 0)
                 data->debug_amplitude = (strcasecmp(value, "true") == 0 || strcmp(value, "1") == 0);
-            else if (strcmp(key, "LIVE_LISTEN") == 0)
-                data->live_listen = (strcasecmp(value, "true") == 0 || strcmp(value, "1") == 0);
-            else if (strcmp(key, "AUDIO_OUTPUT_DEVICE") == 0)
-                data->output_device_index = atoi(value);
             else if (strcmp(key, "CHUNK_SIZE") == 0)
                 data->chunk_size = atoi(value);
         }
     }
     fclose(f);
 }
-
 
 static int audioCallback(const void *inputBuffer, void *outputBuffer,
                          unsigned long framesPerBuffer,
@@ -81,22 +71,11 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
 {
     AudioData *data = (AudioData *)userData;
     const short *input = (const short *)inputBuffer;
-    short *output = (short *)outputBuffer;
 
     if (!input)
     {
         fprintf(stderr, "No input detected!\n");
-        if (output)
-            memset(output, 0, framesPerBuffer * sizeof(short));
         return paContinue;
-    }
-    if (data->live_listen && output)
-    {
-        memcpy(output, input, framesPerBuffer * sizeof(short));
-    }
-    else if (output)
-    {
-        memset(output, 0, framesPerBuffer * sizeof(short));
     }
 
     int max_amplitude = 0;
@@ -216,7 +195,7 @@ void recorder(const char *com_port)
         return;
     }
 
-    PaStreamParameters inputParams, outputParams;
+    PaStreamParameters inputParams;
     inputParams.device = Pa_GetDefaultInputDevice();
     if (inputParams.device == paNoDevice)
     {
@@ -230,22 +209,9 @@ void recorder(const char *com_port)
     inputParams.suggestedLatency = Pa_GetDeviceInfo(inputParams.device)->defaultLowInputLatency;
     inputParams.hostApiSpecificStreamInfo = NULL;
 
-    outputParams.device = (data.output_device_index >= 0) ? data.output_device_index : Pa_GetDefaultOutputDevice();
-    if (data.live_listen && outputParams.device == paNoDevice)
-    {
-        fprintf(stderr, "No default output device.\n");
-        Pa_Terminate();
-        return;
-    }
-
-    outputParams.channelCount = CHANNELS;
-    outputParams.sampleFormat = paInt16;
-    outputParams.suggestedLatency = Pa_GetDeviceInfo(outputParams.device)->defaultLowOutputLatency;
-    outputParams.hostApiSpecificStreamInfo = NULL;
-
     err = Pa_OpenStream(&stream,
                         &inputParams,
-                        data.live_listen ? &outputParams : NULL,
+                        NULL,
                         SAMPLE_RATE,
                         CHUNK_SIZE,
                         paClipOff,
