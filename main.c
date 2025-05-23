@@ -159,7 +159,7 @@ int main(void)
     setvbuf(stdout, NULL, _IOLBF, 0);
     setvbuf(stderr, NULL, _IOLBF, 0);
 
-    load_config(".env");
+    load_config(".env", CONFIG config);
 
     if (create_directory_if_not_exists(RECORDING_DIRECTORY) != 0)
     {
