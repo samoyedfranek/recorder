@@ -68,7 +68,7 @@ void send_existing_files(const char *directory)
             if (S_ISREG(file_stat.st_mode))
             {
                 printf("Sending existing file: %s\n", file_path);
-                send_to_telegram(file_path, config.BOT_TOKEN, config.CHAT_IDS);
+                send_to_telegram(file_path, BOT_TOKEN, CHAT_IDS);
             }
         }
         else
@@ -102,7 +102,7 @@ void on_new_file_created(uv_fs_event_t *handle, const char *filename, int events
         }
 
         printf("New file detected: %s\n", full_path);
-        send_to_telegram(full_path, config.BOT_TOKEN, config.CHAT_IDS);
+        send_to_telegram(full_path, BOT_TOKEN, CHAT_IDS);
     }
 }
 
@@ -147,9 +147,9 @@ void *monitor_directory_thread(void *arg)
 
 void *recorder_thread(void *arg)
 {
-    printf("Starting recording on device with COM port %s\n", config.COM_PORT);
-    send_telegram_status(config.BOT_TOKEN, config.CHAT_IDS, "Rozpoczynanie nagrywania");
-    recorder(config.COM_PORT);
+    printf("Starting recording on device with COM port %s\n", COM_PORT);
+    send_telegram_status(BOT_TOKEN, CHAT_IDS, "Rozpoczynanie nagrywania");
+    recorder(COM_PORT);
     return NULL;
 }
 
@@ -159,14 +159,16 @@ int main(void)
     setvbuf(stdout, NULL, _IOLBF, 0);
     setvbuf(stderr, NULL, _IOLBF, 0);
 
-    if (create_directory_if_not_exists(config.RECORDING_DIRECTORY) != 0)
+    load_config(".env");
+
+    if (create_directory_if_not_exists(RECORDING_DIRECTORY) != 0)
     {
         return 1;
     }
 
     pthread_t recorder_thread_id, monitor_thread_id;
 
-    send_existing_files(config.RECORDING_DIRECTORY);
+    send_existing_files(RECORDING_DIRECTORY);
 
     if (pthread_create(&recorder_thread_id, NULL, recorder_thread, NULL) != 0)
     {
@@ -174,7 +176,7 @@ int main(void)
         return 1;
     }
 
-    if (pthread_create(&monitor_thread_id, NULL, monitor_directory_thread, (void *)config.RECORDING_DIRECTORY) != 0)
+    if (pthread_create(&monitor_thread_id, NULL, monitor_directory_thread, (void *)RECORDING_DIRECTORY) != 0)
     {
         perror("Failed to create monitor thread");
         return 1;
