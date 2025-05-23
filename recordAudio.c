@@ -28,7 +28,6 @@ typedef struct
     int debug_amplitude;
     int live_listen;
     int output_device_index;
-    int chunk_size;
 } AudioData;
 
 void load_env(AudioData *data, const char *filename)
@@ -40,12 +39,9 @@ void load_env(AudioData *data, const char *filename)
         data->amplitude_threshold = 300;
         data->debug_amplitude = 0;
         data->live_listen = 0;
-        data->output_device_index = -1;
-        data->chunk_size = 1024;       
+        data->output_device_index = -1; // default device
         return;
     }
-
-    data->chunk_size = 1024; 
 
     char line[256];
     while (fgets(line, sizeof(line), f))
@@ -64,8 +60,6 @@ void load_env(AudioData *data, const char *filename)
                 data->live_listen = (strcasecmp(value, "true") == 0 || strcmp(value, "1") == 0);
             else if (strcmp(key, "AUDIO_OUTPUT_DEVICE") == 0)
                 data->output_device_index = atoi(value);
-            else if (strcmp(key, "CHUNK_SIZE") == 0)
-                data->chunk_size = atoi(value);
         }
     }
     fclose(f);
