@@ -3,11 +3,12 @@
 
 #define MAX_LINE_LENGTH 512
 #define MAX_ENV_VARS 20
+#define MAX_CHAT_IDS 10
 
 typedef struct
 {
     char BOT_TOKEN[256];
-    char CHAT_ID[256];
+    char *CHAT_IDS[MAX_CHAT_IDS]; // NULL-terminated array
     char COM_PORT[256];
     char RECORDING_DIRECTORY[256];
     int AUDIO_INPUT_DEVICE;
@@ -17,12 +18,13 @@ typedef struct
     char RECORDER_CMD[256];
     char REPO_BRANCH[64];
     int AMPLITUDE_THRESHOLD;
-    int DEBUG_AMPLITUDE; // 0 or 1
-    int LIVE_LISTEN;     // 0 or 1 (can be ignored if not used)
+    int DEBUG_AMPLITUDE;
+    int LIVE_LISTEN;
     char EXTRA_TEXT[256];
 } CONFIG;
 
-// Load .env file and populate CONFIG struct, returns 0 on success, -1 on failure
-int load_config(const char *filename, CONFIG *config);
+extern CONFIG config;
+
+int load_config(const char *filename);
 
 #endif
