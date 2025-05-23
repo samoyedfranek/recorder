@@ -6,23 +6,23 @@
 
 typedef struct
 {
-    char bot_token[256];
-    char chat_id[256];
-    char com_port[256];
-    char recording_directory[256];
-    int audio_input_device;
-    int audio_output_device;
-    char user_name[256];
-    char workdir[256];
-    char recorder_cmd[256];
-    char repo_branch[64];
-    int amplitude_threshold;
-    int debug_amplitude; // 0 or 1
-    int live_listen;     // 0 or 1 (can be ignored if not used)
-    char extra_text[256];
-} Config;
+    char BOT_TOKEN[256];
+    char CHAT_ID[256];
+    char COM_PORT[256];
+    char RECORDING_DIRECTORY[256];
+    int AUDIO_INPUT_DEVICE;
+    int AUDIO_OUTPUT_DEVICE;
+    char USER_NAME[256];
+    char WORKDIR[256];
+    char RECORDER_CMD[256];
+    char REPO_BRANCH[64];
+    int AMPLITUDE_THRESHOLD;
+    int DEBUG_AMPLITUDE; // 0 or 1
+    int LIVE_LISTEN;     // 0 or 1 (can be ignored if not used)
+    char EXTRA_TEXT[256];
+} CONFIG;
 
-// Load .env file and populate Config struct, returns 0 on success, -1 on failure
-int load_config(const char *filename, Config *config);
+// Load .env file and populate CONFIG struct, returns 0 on success, -1 on failure
+int LOAD_CONFIG(const char *filename, CONFIG *config);
 
 #endif
