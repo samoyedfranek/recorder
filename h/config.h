@@ -23,6 +23,6 @@ typedef struct
 } CONFIG;
 
 // Load .env file and populate CONFIG struct, returns 0 on success, -1 on failure
-int LOAD_CONFIG(const char *filename, CONFIG *config);
+int load_config(const char *filename, CONFIG *config);
 
 #endif
