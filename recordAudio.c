@@ -5,6 +5,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <stdatomic.h>
 #include <portaudio.h>
 #include "h/write_wav_file.h"
 #include "h/open_serial_port.h"
@@ -16,16 +17,16 @@
 #define RECORDINGS_DIR "./recordings"
 #define FRAMES_PER_BUFFER 512
 
+// Thread-safe simple queue for live listen data (circular buffer)
 typedef struct
 {
-    short buffer[FRAMES_PER_BUFFER * 64];
+    short buffer[FRAMES_PER_BUFFER * 64]; // Buffer for 64 chunks (~0.6 seconds)
     int writeIndex;
     int readIndex;
     pthread_mutex_t mutex;
 } AudioQueue;
 
 static AudioQueue audioQueue;
-static volatile int liveListenRunning = 0; // flag to control live listen thread
 
 void initQueue(AudioQueue *q)
 {
@@ -49,7 +50,7 @@ int dequeue(AudioQueue *q, short *data, int frames)
     pthread_mutex_lock(&q->mutex);
     if (q->readIndex == q->writeIndex)
     {
-        empty = 1;
+        empty = 1; // buffer empty
     }
     else
     {
@@ -74,6 +75,9 @@ typedef struct
     int chunk_size;
 } AudioData;
 
+// Global atomic flag to control live listen thread
+static atomic_int keep_listening = 1;
+
 static int audioCallback(const void *inputBuffer, void *outputBuffer,
                          unsigned long framesPerBuffer,
                          const PaStreamCallbackTimeInfo *timeInfo,
@@ -89,6 +93,7 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
         return paContinue;
     }
 
+    // Enqueue audio for live listen
     enqueue(&audioQueue, input, framesPerBuffer);
 
     int max_amplitude = 0;
@@ -111,7 +116,7 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
         printf("Recording started.\n");
         data->recording = 1;
         data->size = 0;
-        data->capacity = SAMPLE_RATE * 10;
+        data->capacity = SAMPLE_RATE * 10; // initial buffer for 10 seconds
         data->buffer = (short *)malloc(data->capacity * sizeof(short));
         if (!data->buffer)
         {
@@ -190,6 +195,7 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
     return paContinue;
 }
 
+// Playback callback for live listening
 static int playCallback(const void *inputBuffer, void *outputBuffer,
                         unsigned long framesPerBuffer,
                         const PaStreamCallbackTimeInfo *timeInfo,
@@ -197,8 +203,10 @@ static int playCallback(const void *inputBuffer, void *outputBuffer,
                         void *userData)
 {
     short *out = (short *)outputBuffer;
+
     if (!dequeue(&audioQueue, out, framesPerBuffer))
     {
+        // No data available, output silence
         memset(out, 0, framesPerBuffer * sizeof(short));
     }
     return paContinue;
@@ -206,13 +214,11 @@ static int playCallback(const void *inputBuffer, void *outputBuffer,
 
 void *liveListenThread(void *arg)
 {
-    (void)arg; // unused param
-
     PaStream *playStream;
     PaStreamParameters outputParams;
     PaError err;
 
-    outputParams.device = AUDIO_OUTPUT_DEVICE;
+    outputParams.device = AUDIO_OUTPUT_DEVICE; // from config.h
     if (outputParams.device == paNoDevice)
     {
         fprintf(stderr, "No output device available for live listen\n");
@@ -240,15 +246,17 @@ void *liveListenThread(void *arg)
     }
 
     printf("Live listening started...\n");
-    liveListenRunning = 1;
 
-    while (liveListenRunning)
+    // Run until keep_listening is false
+    while (atomic_load(&keep_listening))
     {
         Pa_Sleep(100);
     }
 
     Pa_StopStream(playStream);
     Pa_CloseStream(playStream);
+    printf("Live listening stopped.\n");
+
     return NULL;
 }
 
@@ -312,27 +320,34 @@ void recorder(const char *com_port)
         return;
     }
 
-    printf("Started recording on serial: %s\n", data.serial_name);
-    if (data.debug_amplitude)
-        printf("Amplitude debugging enabled. Threshold: %d\n", data.amplitude_threshold);
-
     if (LIVE_LISTEN)
     {
+        atomic_store(&keep_listening, 1);
         pthread_create(&listenThread, NULL, liveListenThread, NULL);
-        pthread_detach(listenThread); // detach thread so it cleans up after itself
     }
 
+    printf("Recorder started. Press Ctrl+C to stop...\n");
+
+    // Simple loop - in real code, catch signals to stop cleanly
     while (1)
     {
         sleep(1);
-        // Optional: add signal handling or other exit condition here
+        // For demo, press Ctrl+C to exit (kill signal)
     }
 
-    // If you want to cleanup properly on exit:
-    liveListenRunning = 0;
-    // pthread_join(listenThread, NULL); // only if not detached
+    // Stop live listen thread if running
+    if (LIVE_LISTEN)
+    {
+        atomic_store(&keep_listening, 0);
+        pthread_join(listenThread, NULL);
+    }
 
     Pa_StopStream(recordStream);
     Pa_CloseStream(recordStream);
     Pa_Terminate();
+
+    if (data.buffer)
+        free(data.buffer);
+
+    printf("Recorder stopped.\n");
 }
