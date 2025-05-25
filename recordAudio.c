@@ -9,12 +9,18 @@
 #include "h/open_serial_port.h"
 #include "h/recordAudio.h"
 
-#define SAMPLE_RATE 48000
-#define CHANNELS 1
-#define CHUNK_SIZE 1024
-#define SILENCE_THRESHOLD 5
-#define REMOVE_LAST_SECONDS 5
-#define RECORDINGS_DIR "./recordings"
+#define COM_PORT "/dev/ttyACM0"
+#define RECORDING_DIRECTORY "./recordings"
+#define AUDIO_INPUT_DEVICE 0
+#define AUDIO_OUTPUT_DEVICE 0
+#define USER_NAME "fhadz"
+#define WORKDIR "/home/fhadz/recorder"
+#define RECORDER_CMD "/home/fhadz/recorder/recorder"
+#define REPO_BRANCH "main"
+#define AMPLITUDE_THRESHOLD 300
+#define DEBUG_AMPLITUDE 1
+#define LIVE_LISTEN 1
+#define EXTRA_TEXT "ez"
 
 typedef struct
 {
@@ -30,48 +36,6 @@ typedef struct
     int output_device_index;
     int chunk_size;
 } AudioData;
-
-
-void load_env(AudioData *data, const char *filename)
-{
-    FILE *f = fopen(filename, "r");
-    if (!f)
-    {
-        fprintf(stderr, "Warning: Could not open %s, using defaults\n", filename);
-        data->amplitude_threshold = 300;
-        data->debug_amplitude = 0;
-        data->live_listen = 0;
-        data->output_device_index = -1;
-        data->chunk_size = 1024;       
-        return;
-    }
-
-    data->chunk_size = 1024; 
-
-    char line[256];
-    while (fgets(line, sizeof(line), f))
-    {
-        if (line[0] == '#' || line[0] == '\n')
-            continue;
-
-        char key[64], value[64];
-        if (sscanf(line, "%63[^=]=%63s", key, value) == 2)
-        {
-            if (strcmp(key, "AMPLITUDE_THRESHOLD") == 0)
-                data->amplitude_threshold = atoi(value);
-            else if (strcmp(key, "DEBUG_AMPLITUDE") == 0)
-                data->debug_amplitude = (strcasecmp(value, "true") == 0 || strcmp(value, "1") == 0);
-            else if (strcmp(key, "LIVE_LISTEN") == 0)
-                data->live_listen = (strcasecmp(value, "true") == 0 || strcmp(value, "1") == 0);
-            else if (strcmp(key, "AUDIO_OUTPUT_DEVICE") == 0)
-                data->output_device_index = atoi(value);
-            else if (strcmp(key, "CHUNK_SIZE") == 0)
-                data->chunk_size = atoi(value);
-        }
-    }
-    fclose(f);
-}
-
 
 static int audioCallback(const void *inputBuffer, void *outputBuffer,
                          unsigned long framesPerBuffer,
@@ -202,9 +166,6 @@ void recorder(const char *com_port)
 {
     PaError err;
     PaStream *stream;
-    AudioData data = {0};
-
-    load_env(&data, ".env");
 
     char *serial_name = open_serial_port(com_port);
     snprintf(data.serial_name, sizeof(data.serial_name), "%s", serial_name ? serial_name : "unknown");
