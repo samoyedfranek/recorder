@@ -167,134 +167,54 @@ void recorder(const char *com_port)
         return;
     }
 
-    if (LIVE_LISTEN)
+    PaStreamParameters inputParams;
+    inputParams.device = Pa_GetDefaultInputDevice();
+    if (inputParams.device == paNoDevice)
     {
-        PaStreamParameters inputParams, outputParams;
+        fprintf(stderr, "No default input device.\n");
+        Pa_Terminate();
+        return;
+    }
 
-        inputParams.device = AUDIO_INPUT_DEVICE;
-        if (inputParams.device == paNoDevice)
-        {
-            fprintf(stderr, "No specified input device.\n");
-            Pa_Terminate();
-            return;
-        }
-        inputParams.channelCount = CHANNELS;
-        inputParams.sampleFormat = paInt16;
-        inputParams.suggestedLatency = Pa_GetDeviceInfo(inputParams.device)->defaultLowInputLatency;
-        inputParams.hostApiSpecificStreamInfo = NULL;
+    inputParams.channelCount = CHANNELS;
+    inputParams.sampleFormat = paInt16;
+    inputParams.suggestedLatency = Pa_GetDeviceInfo(inputParams.device)->defaultLowInputLatency;
+    inputParams.hostApiSpecificStreamInfo = NULL;
 
-        outputParams.device = AUDIO_OUTPUT_DEVICE;
-        if (outputParams.device == paNoDevice)
-        {
-            fprintf(stderr, "No specified output device.\n");
-            Pa_Terminate();
-            return;
-        }
-        outputParams.channelCount = CHANNELS;
-        outputParams.sampleFormat = paInt16;
-        outputParams.suggestedLatency = Pa_GetDeviceInfo(outputParams.device)->defaultLowOutputLatency;
-        outputParams.hostApiSpecificStreamInfo = NULL;
+    err = Pa_OpenStream(&stream,
+                        &inputParams,
+                        NULL,
+                        SAMPLE_RATE,
+                        data.chunk_size,
+                        paClipOff,
+                        audioCallback,
+                        &data);
+    if (err != paNoError)
+    {
+        fprintf(stderr, "PortAudio stream error: %s\n", Pa_GetErrorText(err));
+        Pa_Terminate();
+        return;
+    }
 
-        err = Pa_OpenStream(&stream,
-                            &inputParams,
-                            &outputParams,
-                            SAMPLE_RATE,
-                            data.chunk_size,
-                            paClipOff,
-                            NULL,
-                            NULL);
-        if (err != paNoError)
-        {
-            fprintf(stderr, "PortAudio open stream error: %s\n", Pa_GetErrorText(err));
-            Pa_Terminate();
-            return;
-        }
-
-        err = Pa_StartStream(stream);
-        if (err != paNoError)
-        {
-            fprintf(stderr, "PortAudio start stream error: %s\n", Pa_GetErrorText(err));
-            Pa_CloseStream(stream);
-            Pa_Terminate();
-            return;
-        }
-
-        printf("Live listen started. Press Ctrl+C to stop.\n");
-
-        int16_t buffer[data.chunk_size * CHANNELS];
-
-        while (1)
-        {
-            err = Pa_ReadStream(stream, buffer, data.chunk_size);
-            if (err != paNoError)
-            {
-                fprintf(stderr, "PortAudio read error: %s\n", Pa_GetErrorText(err));
-                break;
-            }
-
-            err = Pa_WriteStream(stream, buffer, data.chunk_size);
-            if (err != paNoError)
-            {
-                fprintf(stderr, "PortAudio write error: %s\n", Pa_GetErrorText(err));
-                break;
-            }
-        }
-
-        Pa_StopStream(stream);
+    err = Pa_StartStream(stream);
+    if (err != paNoError)
+    {
+        fprintf(stderr, "PortAudio start error: %s\n", Pa_GetErrorText(err));
         Pa_CloseStream(stream);
         Pa_Terminate();
+        return;
     }
-    else
+
+    printf("Started recording on serial: %s\n", data.serial_name);
+    if (data.debug_amplitude)
+        printf("Amplitude debugging enabled. Threshold: %d\n", data.amplitude_threshold);
+
+    while (1)
     {
-        PaStreamParameters inputParams;
-        inputParams.device = AUDIO_INPUT_DEVICE;
-        if (inputParams.device == paNoDevice)
-        {
-            fprintf(stderr, "No specified input device.\n");
-            Pa_Terminate();
-            return;
-        }
-
-        inputParams.channelCount = CHANNELS;
-        inputParams.sampleFormat = paInt16;
-        inputParams.suggestedLatency = Pa_GetDeviceInfo(inputParams.device)->defaultLowInputLatency;
-        inputParams.hostApiSpecificStreamInfo = NULL;
-
-        err = Pa_OpenStream(&stream,
-                            &inputParams,
-                            NULL,
-                            SAMPLE_RATE,
-                            data.chunk_size,
-                            paClipOff,
-                            audioCallback,
-                            &data);
-        if (err != paNoError)
-        {
-            fprintf(stderr, "PortAudio stream error: %s\n", Pa_GetErrorText(err));
-            Pa_Terminate();
-            return;
-        }
-
-        err = Pa_StartStream(stream);
-        if (err != paNoError)
-        {
-            fprintf(stderr, "PortAudio start error: %s\n", Pa_GetErrorText(err));
-            Pa_CloseStream(stream);
-            Pa_Terminate();
-            return;
-        }
-
-        printf("Started recording on serial: %s\n", data.serial_name);
-        if (data.debug_amplitude)
-            printf("Amplitude debugging enabled. Threshold: %d\n", data.amplitude_threshold);
-
-        while (1)
-        {
-            sleep(1);
-        }
-
-        Pa_StopStream(stream);
-        Pa_CloseStream(stream);
-        Pa_Terminate();
+        sleep(1);
     }
+
+    Pa_StopStream(stream);
+    Pa_CloseStream(stream);
+    Pa_Terminate();
 }
