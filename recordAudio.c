@@ -183,15 +183,18 @@ void recorder(const char *com_port)
         inputParams.hostApiSpecificStreamInfo = NULL;
 
         outputParams.device = AUDIO_OUTPUT_DEVICE;
-        if (outputParams.device == paNoDevice)
+        if (outputDevice == paNoDevice)
         {
-            fprintf(stderr, "No specified output device.\n");
-            Pa_Terminate();
+            fprintf(stderr, "No output device.\n");
             return;
         }
-        outputParams.channelCount = CHANNELS;
+        const PaDeviceInfo *deviceInfo = Pa_GetDeviceInfo(outputDevice);
+        int outputChannels = deviceInfo->maxOutputChannels > 1 ? 2 : 1;
+
+        outputParams.device = outputDevice;
+        outputParams.channelCount = outputChannels;
         outputParams.sampleFormat = paInt16;
-        outputParams.suggestedLatency = Pa_GetDeviceInfo(outputParams.device)->defaultLowOutputLatency;
+        outputParams.suggestedLatency = deviceInfo->defaultLowOutputLatency;
         outputParams.hostApiSpecificStreamInfo = NULL;
 
         err = Pa_OpenStream(&stream,
