@@ -68,7 +68,7 @@ void send_existing_files(const char *directory)
             if (S_ISREG(file_stat.st_mode))
             {
                 printf("Sending existing file: %s\n", file_path);
-                send_to_telegram(file_path, BOT_TOKEN, CHAT_IDS);
+                send_to_telegram(file_path, BOT_TOKEN, CHAT_ID);
             }
         }
         else
@@ -102,7 +102,7 @@ void on_new_file_created(uv_fs_event_t *handle, const char *filename, int events
         }
 
         printf("New file detected: %s\n", full_path);
-        send_to_telegram(full_path, BOT_TOKEN, CHAT_IDS);
+        send_to_telegram(full_path, BOT_TOKEN, CHAT_ID);
     }
 }
 
@@ -148,7 +148,7 @@ void *monitor_directory_thread(void *arg)
 void *recorder_thread(void *arg)
 {
     printf("Starting recording on device with COM port %s\n", COM_PORT);
-    send_telegram_status(BOT_TOKEN, CHAT_IDS, "Rozpoczynanie nagrywania");
+    send_telegram_status(BOT_TOKEN, CHAT_ID, "Rozpoczynanie nagrywania");
     recorder(COM_PORT);
     return NULL;
 }
@@ -159,7 +159,10 @@ int main(void)
     setvbuf(stdout, NULL, _IOLBF, 0);
     setvbuf(stderr, NULL, _IOLBF, 0);
 
-    load_config(".env");
+    if (load_env(".env") != 0) {
+        printf("Failed to load config\n");
+        return 1;
+    }
 
     if (create_directory_if_not_exists(RECORDING_DIRECTORY) != 0)
     {
