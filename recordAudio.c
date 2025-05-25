@@ -9,6 +9,10 @@
 #include "h/open_serial_port.h"
 #include "h/recordAudio.h"
 
+#define SAMPLE_RATE 48000
+#define CHANNELS 1
+#define RECORDINGS_DIR "./recordings"
+
 #define COM_PORT "/dev/ttyACM0"
 #define RECORDING_DIRECTORY "./recordings"
 #define AUDIO_INPUT_DEVICE 0
@@ -18,9 +22,12 @@
 #define RECORDER_CMD "/home/fhadz/recorder/recorder"
 #define REPO_BRANCH "main"
 #define AMPLITUDE_THRESHOLD 300
+#define CHUNK_SIZE 1024
 #define DEBUG_AMPLITUDE 1
 #define LIVE_LISTEN 1
 #define EXTRA_TEXT "ez"
+#define SILENCE_THRESHOLD 5
+#define REMOVE_LAST_SECONDS 5
 
 typedef struct
 {
