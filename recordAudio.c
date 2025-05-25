@@ -177,9 +177,20 @@ void recorder(const char *com_port)
             Pa_Terminate();
             return;
         }
-        inputParams.channelCount = CHANNELS;
+        const PaDeviceInfo *inputDeviceInfo = Pa_GetDeviceInfo(inputParams.device);
+        int maxInputChannels = inputDeviceInfo->maxInputChannels;
+
+        // Clamp input channels to max supported channels
+        inputParams.channelCount = CHANNELS <= maxInputChannels ? CHANNELS : maxInputChannels;
+        if (inputParams.channelCount == 0)
+        {
+            fprintf(stderr, "Input device has no input channels.\n");
+            Pa_Terminate();
+            return;
+        }
+
         inputParams.sampleFormat = paInt16;
-        inputParams.suggestedLatency = Pa_GetDeviceInfo(inputParams.device)->defaultLowInputLatency;
+        inputParams.suggestedLatency = inputDeviceInfo->defaultLowInputLatency;
         inputParams.hostApiSpecificStreamInfo = NULL;
 
         outputParams.device = AUDIO_OUTPUT_DEVICE;
@@ -189,12 +200,20 @@ void recorder(const char *com_port)
             Pa_Terminate();
             return;
         }
-        const PaDeviceInfo *deviceInfo = Pa_GetDeviceInfo(outputParams.device);
-        int outputChannels = deviceInfo->maxOutputChannels > 1 ? 2 : 1;
+        const PaDeviceInfo *outputDeviceInfo = Pa_GetDeviceInfo(outputParams.device);
+        int maxOutputChannels = outputDeviceInfo->maxOutputChannels;
 
+        // Choose output channels based on max channels
+        int outputChannels = maxOutputChannels > 1 ? 2 : 1;
+        if (outputChannels == 0)
+        {
+            fprintf(stderr, "Output device has no output channels.\n");
+            Pa_Terminate();
+            return;
+        }
         outputParams.channelCount = outputChannels;
         outputParams.sampleFormat = paInt16;
-        outputParams.suggestedLatency = deviceInfo->defaultLowOutputLatency;
+        outputParams.suggestedLatency = outputDeviceInfo->defaultLowOutputLatency;
         outputParams.hostApiSpecificStreamInfo = NULL;
 
         err = Pa_OpenStream(&stream,
