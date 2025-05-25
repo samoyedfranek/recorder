@@ -6,6 +6,7 @@
 // Config variables (extern so they can be accessed from other files)
 extern char BOT_TOKEN[256];
 extern char CHAT_ID[256];
+extern char **CHAT_IDS[21];
 extern char COM_PORT[128];
 extern char RECORDING_DIRECTORY[128];
 extern int AUDIO_INPUT_DEVICE;

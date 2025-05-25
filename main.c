@@ -159,7 +159,8 @@ int main(void)
     setvbuf(stdout, NULL, _IOLBF, 0);
     setvbuf(stderr, NULL, _IOLBF, 0);
 
-    if (load_env(".env") != 0) {
+    if (load_env(".env") != 0)
+    {
         printf("Failed to load config\n");
         return 1;
     }
