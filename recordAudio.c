@@ -189,7 +189,7 @@ void recorder(const char *com_port)
             Pa_Terminate();
             return;
         }
-        outputParams.channelCount = 2;
+        outputParams.channelCount = CHANNELS;
         outputParams.sampleFormat = paInt16;
         outputParams.suggestedLatency = Pa_GetDeviceInfo(outputParams.device)->defaultLowOutputLatency;
         outputParams.hostApiSpecificStreamInfo = NULL;
