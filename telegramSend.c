@@ -63,9 +63,9 @@ int send_to_telegram(const char *file_path, const char *bot_token, char **chat_i
     char base_name[256];
     char timestamp[32];
 
-    load_env(".env")
+    load_env(".env");
 
-        extract_timestamp(file_path, base_name, timestamp, sizeof(base_name), sizeof(timestamp));
+    extract_timestamp(file_path, base_name, timestamp, sizeof(base_name), sizeof(timestamp));
 
     char new_file_path[512];
     snprintf(new_file_path, sizeof(new_file_path), "%s.wav", base_name);
@@ -186,9 +186,9 @@ int send_telegram_status(const char *bot_token, char **chat_ids, const char *mes
     char url[256];
     char message_escaped[1024];
 
-    load_env(".env")
+    load_env(".env");
 
-        char full_message[1280];
+    char full_message[1280];
     if (EXTRA_TEXT[0] != '\0')
     {
         snprintf(full_message, sizeof(full_message), "%s\n%s", message, EXTRA_TEXT);
