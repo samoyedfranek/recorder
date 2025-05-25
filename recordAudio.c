@@ -170,20 +170,6 @@ void recorder(const char *com_port)
     if (LIVE_LISTEN)
     {
         PaStreamParameters inputParams, outputParams;
-        int numDevices = Pa_GetDeviceCount();
-        if (numDevices < 0)
-        {
-            fprintf(stderr, "ERROR: Pa_GetDeviceCount returned 0x%x\n", numDevices);
-            return;
-        }
-        printf("PortAudio device list:\n");
-        for (int i = 0; i < numDevices; i++)
-        {
-            const PaDeviceInfo *deviceInfo = Pa_GetDeviceInfo(i);
-            printf("Device %d: %s\n", i, deviceInfo->name);
-            printf("  Max input channels: %d\n", deviceInfo->maxInputChannels);
-            printf("  Max output channels: %d\n", deviceInfo->maxOutputChannels);
-        }
 
         inputParams.device = AUDIO_INPUT_DEVICE;
         if (inputParams.device == paNoDevice)
@@ -197,14 +183,14 @@ void recorder(const char *com_port)
         inputParams.suggestedLatency = Pa_GetDeviceInfo(inputParams.device)->defaultLowInputLatency;
         inputParams.hostApiSpecificStreamInfo = NULL;
 
-        outputParams.device = AUDIO_OUTPUT_DEVICE;
+        outputParams.device = 3;
         if (outputParams.device == paNoDevice)
         {
             fprintf(stderr, "No specified output device.\n");
             Pa_Terminate();
             return;
         }
-        outputParams.channelCount = CHANNELS;
+        outputParams.channelCount = 2;
         outputParams.sampleFormat = paInt16;
         outputParams.suggestedLatency = Pa_GetDeviceInfo(outputParams.device)->defaultLowOutputLatency;
         outputParams.hostApiSpecificStreamInfo = NULL;
