@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <stdbool.h>
 
 // Define variables with some default values or empty
 char BOT_TOKEN[256] = "";
@@ -23,35 +24,71 @@ char EXTRA_TEXT[64] = "";
 int SILENCE_THRESHOLD = 0;
 int REMOVE_LAST_SECONDS = 0;
 
-// Helper to trim leading and trailing whitespace from a string
+// ----- Chat IDs parsing stuff -----
+#define MAX_CHAT_IDS 20
+char *chat_ids[MAX_CHAT_IDS + 1]; // +1 for NULL terminator
+int chat_ids_count = 0;
+
+void parse_chat_id_array(const char *chat_id_str) {
+    // No free_chat_ids() called, so no free of previous memory
+    // Note: memory leak if parse_chat_id_array called multiple times!
+
+    if (!chat_id_str || strlen(chat_id_str) == 0) {
+        chat_ids[0] = NULL;
+        chat_ids_count = 0;
+        return;
+    }
+
+    char temp[512];
+    strncpy(temp, chat_id_str, sizeof(temp) - 1);
+    temp[sizeof(temp) - 1] = '\0';
+
+    char *token = strtok(temp, ",");
+    chat_ids_count = 0;
+
+    while (token != NULL && chat_ids_count < MAX_CHAT_IDS) {
+        // trim leading spaces
+        while (*token == ' ') token++;
+
+        chat_ids[chat_ids_count] = strdup(token);
+        if (!chat_ids[chat_ids_count]) {
+            fprintf(stderr, "Memory allocation failed for chat_id\n");
+            break;
+        }
+
+        chat_ids_count++;
+        token = strtok(NULL, ",");
+    }
+
+    chat_ids[chat_ids_count] = NULL; // NULL terminate array
+}
+
+// ----- Helper to trim leading and trailing whitespace -----
 static void trim(char *str) {
     char *end;
 
-    // Trim leading space
     while(isspace((unsigned char)*str)) str++;
 
-    if(*str == 0)  // All spaces
+    if(*str == 0)
         return;
 
-    // Trim trailing space
     end = str + strlen(str) - 1;
     while(end > str && isspace((unsigned char)*end)) end--;
 
-    // Write new null terminator
     *(end+1) = 0;
 }
 
-// Parse boolean from string
+// ----- Parse boolean from string -----
 static bool parse_bool(const char *str) {
     return (strcmp(str, "1") == 0 || strcasecmp(str, "true") == 0);
 }
 
-// Parse int safely
+// ----- Parse int safely -----
 static int parse_int(const char *str) {
     return atoi(str);
 }
 
-// Load .env file and parse key=value lines
+// ----- Load .env file and parse key=value lines -----
 int load_env(const char *filename) {
     FILE *file = fopen(filename, "r");
     if (!file) {
@@ -61,14 +98,11 @@ int load_env(const char *filename) {
 
     char line[512];
     while (fgets(line, sizeof(line), file)) {
-        // Skip comments and empty lines
         if (line[0] == '#' || line[0] == '\n') continue;
 
-        // Find '='
         char *equals = strchr(line, '=');
         if (!equals) continue;
 
-        // Split key and value
         *equals = 0;
         char *key = line;
         char *value = equals + 1;
@@ -76,13 +110,11 @@ int load_env(const char *filename) {
         trim(key);
         trim(value);
 
-        // Remove possible quotes around value
         if (value[0] == '"' && value[strlen(value)-1] == '"') {
             value[strlen(value)-1] = 0;
             memmove(value, value+1, strlen(value));
         }
 
-        // Match keys and assign values
         if (strcmp(key, "BOT_TOKEN") == 0) {
             strncpy(BOT_TOKEN, value, sizeof(BOT_TOKEN)-1);
         } else if (strcmp(key, "CHAT_ID") == 0) {
@@ -121,5 +153,9 @@ int load_env(const char *filename) {
     }
 
     fclose(file);
+
+    // Parse CHAT_ID string into array after loading .env
+    parse_chat_id_array(CHAT_ID);
+
     return 0;
 }
