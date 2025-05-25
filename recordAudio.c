@@ -255,7 +255,7 @@ void *liveListenThread(void *arg)
     return NULL;
 }
 
-void recorder(const char *com_port, int live_listen)
+void recorder(const char *com_port)
 {
     PaError err;
     PaStream *recordStream;
@@ -319,7 +319,7 @@ void recorder(const char *com_port, int live_listen)
     if (data.debug_amplitude)
         printf("Amplitude debugging enabled. Threshold: %d\n", data.amplitude_threshold);
 
-    if (live_listen)
+    if (LIVE_LISTEN)
     {
         pthread_create(&listenThread, NULL, liveListenThread, NULL);
     }
