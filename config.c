@@ -7,7 +7,7 @@
 
 // Define variables with some default values or empty
 char BOT_TOKEN[256] = "";
-char CHAT_ID[256] = "";
+char CHAT_IDS[256] = "";
 char COM_PORT[128] = "";
 char RECORDING_DIRECTORY[128] = "";
 int AUDIO_INPUT_DEVICE = 0;
@@ -34,7 +34,7 @@ void parse_chat_id_array(const char *chat_id_str) {
     // Note: memory leak if parse_chat_id_array called multiple times!
 
     if (!chat_id_str || strlen(chat_id_str) == 0) {
-        chat_ids[0] = NULL;
+        CHAT_IDS[0] = NULL;
         chat_ids_count = 0;
         return;
     }
@@ -50,9 +50,9 @@ void parse_chat_id_array(const char *chat_id_str) {
         // trim leading spaces
         while (*token == ' ') token++;
 
-        chat_ids[chat_ids_count] = strdup(token);
-        if (!chat_ids[chat_ids_count]) {
-            fprintf(stderr, "Memory allocation failed for chat_id\n");
+        CHAT_IDS[chat_ids_count] = strdup(token);
+        if (!CHAT_IDS[chat_ids_count]) {
+            fprintf(stderr, "Memory allocation failed for CHAT_IDS\n");
             break;
         }
 
@@ -60,7 +60,7 @@ void parse_chat_id_array(const char *chat_id_str) {
         token = strtok(NULL, ",");
     }
 
-    chat_ids[chat_ids_count] = NULL; // NULL terminate array
+    CHAT_IDS[chat_ids_count] = NULL; // NULL terminate array
 }
 
 // ----- Helper to trim leading and trailing whitespace -----
@@ -117,8 +117,8 @@ int load_env(const char *filename) {
 
         if (strcmp(key, "BOT_TOKEN") == 0) {
             strncpy(BOT_TOKEN, value, sizeof(BOT_TOKEN)-1);
-        } else if (strcmp(key, "CHAT_ID") == 0) {
-            strncpy(CHAT_ID, value, sizeof(CHAT_ID)-1);
+        } else if (strcmp(key, "CHAT_IDS") == 0) {
+            strncpy(CHAT_IDS, value, sizeof(CHAT_IDS)-1);
         } else if (strcmp(key, "COM_PORT") == 0) {
             strncpy(COM_PORT, value, sizeof(COM_PORT)-1);
         } else if (strcmp(key, "RECORDING_DIRECTORY") == 0) {
@@ -154,8 +154,8 @@ int load_env(const char *filename) {
 
     fclose(file);
 
-    // Parse CHAT_ID string into array after loading .env
-    parse_chat_id_array(CHAT_ID);
+    // Parse CHAT_IDS string into array after loading .env
+    parse_chat_id_array(CHAT_IDS);
 
     return 0;
 }
