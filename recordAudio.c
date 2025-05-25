@@ -16,16 +16,16 @@
 #define RECORDINGS_DIR "./recordings"
 #define FRAMES_PER_BUFFER 512
 
-// Thread-safe simple queue for live listen data (circular buffer)
 typedef struct
 {
-    short buffer[FRAMES_PER_BUFFER * 64]; // Buffer for ~32k samples (~0.6 seconds)
+    short buffer[FRAMES_PER_BUFFER * 64];
     int writeIndex;
     int readIndex;
     pthread_mutex_t mutex;
 } AudioQueue;
 
 static AudioQueue audioQueue;
+static volatile int liveListenRunning = 0; // flag to control live listen thread
 
 void initQueue(AudioQueue *q)
 {
@@ -37,7 +37,6 @@ void initQueue(AudioQueue *q)
 void enqueue(AudioQueue *q, const short *data, int frames)
 {
     pthread_mutex_lock(&q->mutex);
-    // copy frames to buffer at writeIndex position (wrap-around)
     int pos = q->writeIndex * FRAMES_PER_BUFFER;
     memcpy(&q->buffer[pos], data, frames * sizeof(short));
     q->writeIndex = (q->writeIndex + 1) % 64;
@@ -50,7 +49,7 @@ int dequeue(AudioQueue *q, short *data, int frames)
     pthread_mutex_lock(&q->mutex);
     if (q->readIndex == q->writeIndex)
     {
-        empty = 1; // buffer empty
+        empty = 1;
     }
     else
     {
@@ -90,7 +89,6 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
         return paContinue;
     }
 
-    // Enqueue audio for live listen
     enqueue(&audioQueue, input, framesPerBuffer);
 
     int max_amplitude = 0;
@@ -113,7 +111,7 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
         printf("Recording started.\n");
         data->recording = 1;
         data->size = 0;
-        data->capacity = SAMPLE_RATE * 10; // initial buffer for 10 seconds
+        data->capacity = SAMPLE_RATE * 10;
         data->buffer = (short *)malloc(data->capacity * sizeof(short));
         if (!data->buffer)
         {
@@ -192,7 +190,6 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
     return paContinue;
 }
 
-// Playback callback for live listening
 static int playCallback(const void *inputBuffer, void *outputBuffer,
                         unsigned long framesPerBuffer,
                         const PaStreamCallbackTimeInfo *timeInfo,
@@ -200,10 +197,8 @@ static int playCallback(const void *inputBuffer, void *outputBuffer,
                         void *userData)
 {
     short *out = (short *)outputBuffer;
-
     if (!dequeue(&audioQueue, out, framesPerBuffer))
     {
-        // No data available, output silence
         memset(out, 0, framesPerBuffer * sizeof(short));
     }
     return paContinue;
@@ -211,11 +206,13 @@ static int playCallback(const void *inputBuffer, void *outputBuffer,
 
 void *liveListenThread(void *arg)
 {
+    (void)arg; // unused param
+
     PaStream *playStream;
     PaStreamParameters outputParams;
     PaError err;
 
-    outputParams.device = AUDIO_OUTPUT_DEVICE; // from your config.h
+    outputParams.device = AUDIO_OUTPUT_DEVICE;
     if (outputParams.device == paNoDevice)
     {
         fprintf(stderr, "No output device available for live listen\n");
@@ -243,9 +240,9 @@ void *liveListenThread(void *arg)
     }
 
     printf("Live listening started...\n");
+    liveListenRunning = 1;
 
-    // Keep running, stop condition can be added
-    while (1)
+    while (liveListenRunning)
     {
         Pa_Sleep(100);
     }
@@ -322,12 +319,18 @@ void recorder(const char *com_port)
     if (LIVE_LISTEN)
     {
         pthread_create(&listenThread, NULL, liveListenThread, NULL);
+        pthread_detach(listenThread); // detach thread so it cleans up after itself
     }
 
     while (1)
     {
         sleep(1);
+        // Optional: add signal handling or other exit condition here
     }
+
+    // If you want to cleanup properly on exit:
+    liveListenRunning = 0;
+    // pthread_join(listenThread, NULL); // only if not detached
 
     Pa_StopStream(recordStream);
     Pa_CloseStream(recordStream);
