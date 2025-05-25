@@ -79,7 +79,7 @@ void extract_timestamp(const char *file_path, char *base_name, char *timestamp, 
     regfree(&regex);
 }
 
-int send_to_telegram(const char *file_path, const char *bot_token, char **chat_ids)
+int send_to_telegram(const char *file_path, const char *bot_token, char *chat_ids)
 {
     CURL *curl;
     CURLcode res;
@@ -201,7 +201,7 @@ void escape_markdown_v2(char *dest, const char *src, size_t size)
     dest[j] = '\0';
 }
 
-int send_telegram_status(const char *bot_token, char **chat_ids, const char *message)
+int send_telegram_status(const char *bot_token, char *chat_ids, const char *message)
 {
     CURL *curl;
     CURLcode res;
