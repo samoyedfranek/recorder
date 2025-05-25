@@ -166,6 +166,7 @@ void recorder(const char *com_port)
         fprintf(stderr, "PortAudio init error: %s\n", Pa_GetErrorText(err));
         return;
     }
+
     if (LIVE_LISTEN)
     {
         PaStreamParameters inputParams, outputParams;
@@ -177,43 +178,21 @@ void recorder(const char *com_port)
             Pa_Terminate();
             return;
         }
-        const PaDeviceInfo *inputDeviceInfo = Pa_GetDeviceInfo(inputParams.device);
-        int maxInputChannels = inputDeviceInfo->maxInputChannels;
-
-        // Clamp input channels to max supported channels
-        inputParams.channelCount = CHANNELS <= maxInputChannels ? CHANNELS : maxInputChannels;
-        if (inputParams.channelCount == 0)
-        {
-            fprintf(stderr, "Input device has no input channels.\n");
-            Pa_Terminate();
-            return;
-        }
-
+        inputParams.channelCount = CHANNELS;
         inputParams.sampleFormat = paInt16;
-        inputParams.suggestedLatency = inputDeviceInfo->defaultLowInputLatency;
+        inputParams.suggestedLatency = Pa_GetDeviceInfo(inputParams.device)->defaultLowInputLatency;
         inputParams.hostApiSpecificStreamInfo = NULL;
 
         outputParams.device = AUDIO_OUTPUT_DEVICE;
         if (outputParams.device == paNoDevice)
         {
-            fprintf(stderr, "No output device.\n");
+            fprintf(stderr, "No specified output device.\n");
             Pa_Terminate();
             return;
         }
-        const PaDeviceInfo *outputDeviceInfo = Pa_GetDeviceInfo(outputParams.device);
-        int maxOutputChannels = outputDeviceInfo->maxOutputChannels;
-
-        // Choose output channels based on max channels
-        int outputChannels = maxOutputChannels > 1 ? 2 : 1;
-        if (outputChannels == 0)
-        {
-            fprintf(stderr, "Output device has no output channels.\n");
-            Pa_Terminate();
-            return;
-        }
-        outputParams.channelCount = outputChannels;
+        outputParams.channelCount = CHANNELS;
         outputParams.sampleFormat = paInt16;
-        outputParams.suggestedLatency = outputDeviceInfo->defaultLowOutputLatency;
+        outputParams.suggestedLatency = Pa_GetDeviceInfo(outputParams.device)->defaultLowOutputLatency;
         outputParams.hostApiSpecificStreamInfo = NULL;
 
         err = Pa_OpenStream(&stream,
@@ -265,7 +244,6 @@ void recorder(const char *com_port)
         Pa_CloseStream(stream);
         Pa_Terminate();
     }
-
     else
     {
         PaStreamParameters inputParams;
