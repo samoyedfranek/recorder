@@ -4,6 +4,7 @@
 #include <math.h>
 #include <time.h>
 #include <unistd.h>
+#include <pthread.h>
 #include <portaudio.h>
 #include "h/write_wav_file.h"
 #include "h/open_serial_port.h"
@@ -13,6 +14,53 @@
 #define SAMPLE_RATE 48000
 #define CHANNELS 1
 #define RECORDINGS_DIR "./recordings"
+#define FRAMES_PER_BUFFER 512
+
+// Thread-safe simple queue for live listen data (circular buffer)
+typedef struct
+{
+    short buffer[FRAMES_PER_BUFFER * 64]; // Buffer for ~32k samples (~0.6 seconds)
+    int writeIndex;
+    int readIndex;
+    pthread_mutex_t mutex;
+} AudioQueue;
+
+static AudioQueue audioQueue;
+
+void initQueue(AudioQueue *q)
+{
+    q->writeIndex = 0;
+    q->readIndex = 0;
+    pthread_mutex_init(&q->mutex, NULL);
+}
+
+void enqueue(AudioQueue *q, const short *data, int frames)
+{
+    pthread_mutex_lock(&q->mutex);
+    // copy frames to buffer at writeIndex position (wrap-around)
+    int pos = q->writeIndex * FRAMES_PER_BUFFER;
+    memcpy(&q->buffer[pos], data, frames * sizeof(short));
+    q->writeIndex = (q->writeIndex + 1) % 64;
+    pthread_mutex_unlock(&q->mutex);
+}
+
+int dequeue(AudioQueue *q, short *data, int frames)
+{
+    int empty = 0;
+    pthread_mutex_lock(&q->mutex);
+    if (q->readIndex == q->writeIndex)
+    {
+        empty = 1; // buffer empty
+    }
+    else
+    {
+        int pos = q->readIndex * FRAMES_PER_BUFFER;
+        memcpy(data, &q->buffer[pos], frames * sizeof(short));
+        q->readIndex = (q->readIndex + 1) % 64;
+    }
+    pthread_mutex_unlock(&q->mutex);
+    return !empty;
+}
 
 typedef struct
 {
@@ -41,6 +89,9 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
         fprintf(stderr, "No input detected!\n");
         return paContinue;
     }
+
+    // Enqueue audio for live listen
+    enqueue(&audioQueue, input, framesPerBuffer);
 
     int max_amplitude = 0;
     for (unsigned int i = 0; i < framesPerBuffer; i++)
@@ -141,11 +192,75 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
     return paContinue;
 }
 
-void recorder(const char *com_port)
+// Playback callback for live listening
+static int playCallback(const void *inputBuffer, void *outputBuffer,
+                        unsigned long framesPerBuffer,
+                        const PaStreamCallbackTimeInfo *timeInfo,
+                        PaStreamCallbackFlags statusFlags,
+                        void *userData)
+{
+    short *out = (short *)outputBuffer;
+
+    if (!dequeue(&audioQueue, out, framesPerBuffer))
+    {
+        // No data available, output silence
+        memset(out, 0, framesPerBuffer * sizeof(short));
+    }
+    return paContinue;
+}
+
+void *liveListenThread(void *arg)
+{
+    PaStream *playStream;
+    PaStreamParameters outputParams;
+    PaError err;
+
+    outputParams.device = AUDIO_OUTPUT_DEVICE; // from your config.h
+    if (outputParams.device == paNoDevice)
+    {
+        fprintf(stderr, "No output device available for live listen\n");
+        return NULL;
+    }
+    outputParams.channelCount = CHANNELS;
+    outputParams.sampleFormat = paInt16;
+    outputParams.suggestedLatency = Pa_GetDeviceInfo(outputParams.device)->defaultLowOutputLatency;
+    outputParams.hostApiSpecificStreamInfo = NULL;
+
+    err = Pa_OpenStream(&playStream, NULL, &outputParams, SAMPLE_RATE,
+                        FRAMES_PER_BUFFER, paClipOff, playCallback, NULL);
+    if (err != paNoError)
+    {
+        fprintf(stderr, "Failed to open playback stream: %s\n", Pa_GetErrorText(err));
+        return NULL;
+    }
+
+    err = Pa_StartStream(playStream);
+    if (err != paNoError)
+    {
+        fprintf(stderr, "Failed to start playback stream: %s\n", Pa_GetErrorText(err));
+        Pa_CloseStream(playStream);
+        return NULL;
+    }
+
+    printf("Live listening started...\n");
+
+    // Keep running, stop condition can be added
+    while (1)
+    {
+        Pa_Sleep(100);
+    }
+
+    Pa_StopStream(playStream);
+    Pa_CloseStream(playStream);
+    return NULL;
+}
+
+void recorder(const char *com_port, int live_listen)
 {
     PaError err;
-    PaStream *stream;
+    PaStream *recordStream;
     AudioData data = {0};
+    pthread_t listenThread;
 
     if (load_env(".env") != 0)
     {
@@ -167,6 +282,8 @@ void recorder(const char *com_port)
         return;
     }
 
+    initQueue(&audioQueue);
+
     PaStreamParameters inputParams;
     inputParams.device = Pa_GetDefaultInputDevice();
     if (inputParams.device == paNoDevice)
@@ -175,21 +292,13 @@ void recorder(const char *com_port)
         Pa_Terminate();
         return;
     }
-
     inputParams.channelCount = CHANNELS;
     inputParams.sampleFormat = paInt16;
     inputParams.suggestedLatency = Pa_GetDeviceInfo(inputParams.device)->defaultLowInputLatency;
     inputParams.hostApiSpecificStreamInfo = NULL;
 
-    // No output device parameters at all, no live listen
-    err = Pa_OpenStream(&stream,
-                        &inputParams,
-                        NULL,  // no output
-                        SAMPLE_RATE,
-                        data.chunk_size,
-                        paClipOff,
-                        audioCallback,
-                        &data);
+    err = Pa_OpenStream(&recordStream, &inputParams, NULL, SAMPLE_RATE,
+                        data.chunk_size, paClipOff, audioCallback, &data);
     if (err != paNoError)
     {
         fprintf(stderr, "PortAudio stream error: %s\n", Pa_GetErrorText(err));
@@ -197,11 +306,11 @@ void recorder(const char *com_port)
         return;
     }
 
-    err = Pa_StartStream(stream);
+    err = Pa_StartStream(recordStream);
     if (err != paNoError)
     {
         fprintf(stderr, "PortAudio start error: %s\n", Pa_GetErrorText(err));
-        Pa_CloseStream(stream);
+        Pa_CloseStream(recordStream);
         Pa_Terminate();
         return;
     }
@@ -210,12 +319,17 @@ void recorder(const char *com_port)
     if (data.debug_amplitude)
         printf("Amplitude debugging enabled. Threshold: %d\n", data.amplitude_threshold);
 
+    if (live_listen)
+    {
+        pthread_create(&listenThread, NULL, liveListenThread, NULL);
+    }
+
     while (1)
     {
         sleep(1);
     }
 
-    Pa_StopStream(stream);
-    Pa_CloseStream(stream);
+    Pa_StopStream(recordStream);
+    Pa_CloseStream(recordStream);
     Pa_Terminate();
 }
