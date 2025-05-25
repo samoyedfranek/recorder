@@ -26,7 +26,7 @@ int REMOVE_LAST_SECONDS = 0;
 
 // ----- Chat IDs parsing stuff -----
 #define MAX_CHAT_IDS 20
-char *chat_ids[MAX_CHAT_IDS + 1]; // +1 for NULL terminator
+char *CHAT_ID[MAX_CHAT_IDS + 1];
 int chat_ids_count = 0;
 
 void parse_chat_id_array(const char *chat_id_str) {
