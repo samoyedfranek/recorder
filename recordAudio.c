@@ -170,6 +170,20 @@ void recorder(const char *com_port)
     if (LIVE_LISTEN)
     {
         PaStreamParameters inputParams, outputParams;
+        int numDevices = Pa_GetDeviceCount();
+        if (numDevices < 0)
+        {
+            fprintf(stderr, "ERROR: Pa_GetDeviceCount returned 0x%x\n", numDevices);
+            return;
+        }
+        printf("PortAudio device list:\n");
+        for (int i = 0; i < numDevices; i++)
+        {
+            const PaDeviceInfo *deviceInfo = Pa_GetDeviceInfo(i);
+            printf("Device %d: %s\n", i, deviceInfo->name);
+            printf("  Max input channels: %d\n", deviceInfo->maxInputChannels);
+            printf("  Max output channels: %d\n", deviceInfo->maxOutputChannels);
+        }
 
         inputParams.device = AUDIO_INPUT_DEVICE;
         if (inputParams.device == paNoDevice)
