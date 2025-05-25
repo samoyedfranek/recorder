@@ -8,6 +8,7 @@
 #include "h/write_wav_file.h"
 #include "h/open_serial_port.h"
 #include "h/recordAudio.h"
+#include "h/config.h"
 
 #define SAMPLE_RATE 48000
 #define CHANNELS 1
