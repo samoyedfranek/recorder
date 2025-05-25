@@ -13,22 +13,6 @@
 #define CHANNELS 1
 #define RECORDINGS_DIR "./recordings"
 
-#define COM_PORT "/dev/ttyACM0"
-#define RECORDING_DIRECTORY "./recordings"
-#define AUDIO_INPUT_DEVICE 0
-#define AUDIO_OUTPUT_DEVICE 0
-#define USER_NAME "fhadz"
-#define WORKDIR "/home/fhadz/recorder"
-#define RECORDER_CMD "/home/fhadz/recorder/recorder"
-#define REPO_BRANCH "main"
-#define AMPLITUDE_THRESHOLD 300
-#define CHUNK_SIZE 1024
-#define DEBUG_AMPLITUDE 1
-#define LIVE_LISTEN 1
-#define EXTRA_TEXT "ez"
-#define SILENCE_THRESHOLD 5
-#define REMOVE_LAST_SECONDS 5
-
 typedef struct
 {
     short *buffer;
@@ -39,8 +23,6 @@ typedef struct
     char serial_name[256];
     int amplitude_threshold;
     int debug_amplitude;
-    int live_listen;
-    int output_device_index;
     int chunk_size;
 } AudioData;
 
@@ -52,22 +34,11 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
 {
     AudioData *data = (AudioData *)userData;
     const short *input = (const short *)inputBuffer;
-    short *output = (short *)outputBuffer;
 
     if (!input)
     {
         fprintf(stderr, "No input detected!\n");
-        if (output)
-            memset(output, 0, framesPerBuffer * sizeof(short));
         return paContinue;
-    }
-    if (data->live_listen && output)
-    {
-        memcpy(output, input, framesPerBuffer * sizeof(short));
-    }
-    else if (output)
-    {
-        memset(output, 0, framesPerBuffer * sizeof(short));
     }
 
     int max_amplitude = 0;
@@ -90,7 +61,7 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
         printf("Recording started.\n");
         data->recording = 1;
         data->size = 0;
-        data->capacity = SAMPLE_RATE * 10;
+        data->capacity = SAMPLE_RATE * 10; // initial buffer for 10 seconds
         data->buffer = (short *)malloc(data->capacity * sizeof(short));
         if (!data->buffer)
         {
@@ -174,7 +145,17 @@ void recorder(const char *com_port)
     PaError err;
     PaStream *stream;
     AudioData data = {0};
-    
+
+    if (load_env(".env") != 0)
+    {
+        printf("Failed to load config\n");
+        return;
+    }
+
+    data.amplitude_threshold = AMPLITUDE_THRESHOLD;
+    data.debug_amplitude = DEBUG_AMPLITUDE;
+    data.chunk_size = CHUNK_SIZE;
+
     char *serial_name = open_serial_port(com_port);
     snprintf(data.serial_name, sizeof(data.serial_name), "%s", serial_name ? serial_name : "unknown");
 
@@ -185,7 +166,7 @@ void recorder(const char *com_port)
         return;
     }
 
-    PaStreamParameters inputParams, outputParams;
+    PaStreamParameters inputParams;
     inputParams.device = Pa_GetDefaultInputDevice();
     if (inputParams.device == paNoDevice)
     {
@@ -199,24 +180,12 @@ void recorder(const char *com_port)
     inputParams.suggestedLatency = Pa_GetDeviceInfo(inputParams.device)->defaultLowInputLatency;
     inputParams.hostApiSpecificStreamInfo = NULL;
 
-    outputParams.device = (data.output_device_index >= 0) ? data.output_device_index : Pa_GetDefaultOutputDevice();
-    if (data.live_listen && outputParams.device == paNoDevice)
-    {
-        fprintf(stderr, "No default output device.\n");
-        Pa_Terminate();
-        return;
-    }
-
-    outputParams.channelCount = CHANNELS;
-    outputParams.sampleFormat = paInt16;
-    outputParams.suggestedLatency = Pa_GetDeviceInfo(outputParams.device)->defaultLowOutputLatency;
-    outputParams.hostApiSpecificStreamInfo = NULL;
-
+    // No output device parameters at all, no live listen
     err = Pa_OpenStream(&stream,
                         &inputParams,
-                        data.live_listen ? &outputParams : NULL,
+                        NULL,  // no output
                         SAMPLE_RATE,
-                        CHUNK_SIZE,
+                        data.chunk_size,
                         paClipOff,
                         audioCallback,
                         &data);
