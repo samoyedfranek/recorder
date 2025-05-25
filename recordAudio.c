@@ -25,8 +25,6 @@ typedef struct
     int amplitude_threshold;
     int debug_amplitude;
     int chunk_size;
-    int live_listen;
-    char audio_output_device[256];
 } AudioData;
 
 static int audioCallback(const void *inputBuffer, void *outputBuffer,
@@ -47,14 +45,13 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
         return paContinue;
     }
 
-    // If live listen enabled, copy input to output for playback
-    if (data->live_listen && output)
+    // Use LIVE_LISTEN macro directly for live monitoring
+    if (LIVE_LISTEN && output)
     {
         memcpy(output, input, framesPerBuffer * sizeof(short));
     }
     else if (output)
     {
-        // No live listen - silence output to avoid noise
         memset(output, 0, framesPerBuffer * sizeof(short));
     }
 
@@ -196,12 +193,6 @@ void recorder(const char *com_port)
     data.amplitude_threshold = AMPLITUDE_THRESHOLD;
     data.debug_amplitude = DEBUG_AMPLITUDE;
     data.chunk_size = CHUNK_SIZE;
-    data.live_listen = LIVE_LISTEN;
-
-    if (strlen(AUDIO_OUTPUT_DEVICE) > 0)
-        snprintf(data.audio_output_device, sizeof(data.audio_output_device), "%s", AUDIO_OUTPUT_DEVICE);
-    else
-        data.audio_output_device[0] = '\0';
 
     char *serial_name = open_serial_port(com_port);
     snprintf(data.serial_name, sizeof(data.serial_name), "%s", serial_name ? serial_name : "unknown");
@@ -229,15 +220,15 @@ void recorder(const char *com_port)
     PaStreamParameters *outputParamsPtr = NULL;
     PaStreamParameters outputParams;
 
-    if (data.live_listen)
+    if (LIVE_LISTEN)
     {
         PaDeviceIndex outputDevice = paNoDevice;
-        if (strlen(data.audio_output_device) > 0)
+        if (strlen(AUDIO_OUTPUT_DEVICE) > 0)
         {
-            outputDevice = findOutputDeviceByName(data.audio_output_device);
+            outputDevice = findOutputDeviceByName(AUDIO_OUTPUT_DEVICE);
             if (outputDevice == paNoDevice)
             {
-                fprintf(stderr, "Specified output device '%s' not found. Using default output device.\n", data.audio_output_device);
+                fprintf(stderr, "Specified output device '%s' not found. Using default output device.\n", AUDIO_OUTPUT_DEVICE);
             }
         }
         if (outputDevice == paNoDevice)
@@ -288,8 +279,8 @@ void recorder(const char *com_port)
     printf("Started recording on serial: %s\n", data.serial_name);
     if (data.debug_amplitude)
         printf("Amplitude debugging enabled. Threshold: %d\n", data.amplitude_threshold);
-    if (data.live_listen)
-        printf("Live listen enabled on output device: %s\n", data.audio_output_device[0] ? data.audio_output_device : "default");
+    if (LIVE_LISTEN)
+        printf("Live listen enabled on output device: %s\n", (strlen(AUDIO_OUTPUT_DEVICE) > 0) ? AUDIO_OUTPUT_DEVICE : "default");
 
     while (1)
     {
