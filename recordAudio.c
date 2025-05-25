@@ -173,7 +173,8 @@ void recorder(const char *com_port)
 {
     PaError err;
     PaStream *stream;
-
+    AudioData data = {0};
+    
     char *serial_name = open_serial_port(com_port);
     snprintf(data.serial_name, sizeof(data.serial_name), "%s", serial_name ? serial_name : "unknown");
 
