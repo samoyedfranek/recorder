@@ -183,14 +183,14 @@ void recorder(const char *com_port)
         inputParams.suggestedLatency = Pa_GetDeviceInfo(inputParams.device)->defaultLowInputLatency;
         inputParams.hostApiSpecificStreamInfo = NULL;
 
-        outputParams.device = 3;
+        outputParams.device = AUDIO_OUTPUT_DEVICE;
         if (outputParams.device == paNoDevice)
         {
             fprintf(stderr, "No specified output device.\n");
             Pa_Terminate();
             return;
         }
-        outputParams.channelCount = 2;
+        outputParams.channelCount = CHANNELS;
         outputParams.sampleFormat = paInt16;
         outputParams.suggestedLatency = Pa_GetDeviceInfo(outputParams.device)->defaultLowOutputLatency;
         outputParams.hostApiSpecificStreamInfo = NULL;
