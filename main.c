@@ -87,6 +87,7 @@ void on_new_file_created(uv_fs_event_t *handle, const char *filename, int events
 
     if ((events & UV_RENAME) || (events & UV_CHANGE))
     {
+
         const char *directory = (const char *)handle->data;
         char full_path[512];
         snprintf(full_path, sizeof(full_path), "%s/%s", directory, filename);
@@ -96,6 +97,7 @@ void on_new_file_created(uv_fs_event_t *handle, const char *filename, int events
         struct stat file_stat;
         if (stat(full_path, &file_stat) != 0 || !S_ISREG(file_stat.st_mode))
         {
+
             return;
         }
 
@@ -151,28 +153,6 @@ void *recorder_thread(void *arg)
     return NULL;
 }
 
-void *live_listen_thread(void *arg)
-{
-    char command[512];
-    snprintf(command, sizeof(command),
-             "arecord -D hw:%s,0 -f cd | aplay -D hw:%s,0",
-             AUDIO_INPUT_DEVICE, AUDIO_OUTPUT_DEVICE);
-
-    printf("Starting live listen with command: %s\n", command);
-
-    int ret = system(command);
-    if (ret == -1)
-    {
-        perror("Failed to execute live listen command");
-    }
-    else
-    {
-        printf("Live listen command exited with status %d\n", WEXITSTATUS(ret));
-    }
-
-    return NULL;
-}
-
 int main(void)
 {
     snd_lib_error_set_handler(silent_alsa_error);
@@ -190,7 +170,7 @@ int main(void)
         return 1;
     }
 
-    pthread_t recorder_thread_id, monitor_thread_id, live_listen_thread_id;
+    pthread_t recorder_thread_id, monitor_thread_id;
 
     send_existing_files(RECORDING_DIRECTORY);
 
@@ -206,21 +186,8 @@ int main(void)
         return 1;
     }
 
-    if (LIVE_LISTEN)
-    {
-        if (pthread_create(&live_listen_thread_id, NULL, live_listen_thread, NULL) != 0)
-        {
-            perror("Failed to create live listen thread");
-            return 1;
-        }
-    }
-
     pthread_join(recorder_thread_id, NULL);
     pthread_join(monitor_thread_id, NULL);
-    if (LIVE_LISTEN)
-    {
-        pthread_join(live_listen_thread_id, NULL);
-    }
 
     printf("All files processed successfully.\n");
     return 0;
