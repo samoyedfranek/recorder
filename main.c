@@ -78,7 +78,9 @@ void send_existing_files(const char *directory)
     }
 
     closedir(dir);
-}void on_new_file_created(uv_fs_event_t *handle, const char *filename, int events, int status)
+}
+
+void on_new_file_created(uv_fs_event_t *handle, const char *filename, int events, int status)
 {
     if (filename == NULL)
         return;
@@ -93,7 +95,7 @@ void send_existing_files(const char *directory)
         char full_path[512];
         snprintf(full_path, sizeof(full_path), "%s/%s", directory, filename);
 
-        sleep(1); 
+        sleep(1);
 
         struct stat file_stat;
         if (stat(full_path, &file_stat) != 0 || !S_ISREG(file_stat.st_mode))
@@ -107,13 +109,15 @@ void send_existing_files(const char *directory)
         snprintf(dest_path, sizeof(dest_path), "./processing/%s", filename);
 
         FILE *src = fopen(full_path, "rb");
-        if (!src) {
+        if (!src)
+        {
             perror("Failed to open source file");
             return;
         }
 
         FILE *dst = fopen(dest_path, "wb");
-        if (!dst) {
+        if (!dst)
+        {
             perror("Failed to open destination file");
             fclose(src);
             return;
@@ -128,6 +132,16 @@ void send_existing_files(const char *directory)
 
         fclose(src);
         fclose(dst);
+
+        // Usuń oryginał po skopiowaniu
+        if (remove(full_path) == 0)
+        {
+            printf("Removed original file: %s\n", full_path);
+        }
+        else
+        {
+            perror("Error removing original file");
+        }
 
         printf("Copied to processing: %s\n", dest_path);
 
