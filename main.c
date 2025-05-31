@@ -79,30 +79,66 @@ void send_existing_files(const char *directory)
 
     closedir(dir);
 }
-
 void on_new_file_created(uv_fs_event_t *handle, const char *filename, int events, int status)
 {
     if (filename == NULL)
         return;
 
+    // Ignoruj pliki kończące się na ".wav.wav"
+    if (strstr(filename, ".wav.wav") != NULL)
+        return;
+
     if ((events & UV_RENAME) || (events & UV_CHANGE))
     {
-
         const char *directory = (const char *)handle->data;
         char full_path[512];
         snprintf(full_path, sizeof(full_path), "%s/%s", directory, filename);
 
-        sleep(1);
+        sleep(1); // Poczekaj, aż plik się zapisze
 
         struct stat file_stat;
         if (stat(full_path, &file_stat) != 0 || !S_ISREG(file_stat.st_mode))
-        {
+            return;
 
+        printf("New file detected: %s\n", full_path);
+
+        // Tworzymy katalog ./processing jeśli nie istnieje
+        create_directory_if_not_exists("./processing");
+
+        // Ścieżka docelowa do ./processing
+        char dest_path[512];
+        snprintf(dest_path, sizeof(dest_path), "./processing/%s", filename);
+
+        // Kopiowanie pliku
+        FILE *src = fopen(full_path, "rb");
+        if (!src)
+        {
+            perror("Failed to open source file");
             return;
         }
 
-        printf("New file detected: %s\n", full_path);
-        send_to_telegram(full_path, BOT_TOKEN, CHAT_IDS);
+        FILE *dst = fopen(dest_path, "wb");
+        if (!dst)
+        {
+            perror("Failed to open destination file");
+            fclose(src);
+            return;
+        }
+
+        char buffer[4096];
+        size_t bytes;
+        while ((bytes = fread(buffer, 1, sizeof(buffer), src)) > 0)
+        {
+            fwrite(buffer, 1, bytes, dst);
+        }
+
+        fclose(src);
+        fclose(dst);
+
+        printf("Copied to processing: %s\n", dest_path);
+
+        // Wysyłka do Telegrama
+        send_to_telegram(dest_path, BOT_TOKEN, CHAT_IDS);
     }
 }
 

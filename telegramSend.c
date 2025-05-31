@@ -68,7 +68,15 @@ int send_to_telegram(const char *file_path, const char *bot_token, char **chat_i
     extract_timestamp(file_path, base_name, timestamp, sizeof(base_name), sizeof(timestamp));
 
     char new_file_path[512];
-    snprintf(new_file_path, sizeof(new_file_path), "%s.wav", base_name);
+    if (strlen(base_name) >= 4 && strcmp(base_name + strlen(base_name) - 4, ".wav") == 0)
+    {
+        strncpy(new_file_path, base_name, sizeof(new_file_path));
+        new_file_path[sizeof(new_file_path) - 1] = '\0';
+    }
+    else
+    {
+        snprintf(new_file_path, sizeof(new_file_path), "%s.wav", base_name);
+    }
 
     if (rename(file_path, new_file_path) != 0)
     {
