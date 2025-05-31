@@ -78,8 +78,7 @@ void send_existing_files(const char *directory)
     }
 
     closedir(dir);
-}
-void on_new_file_created(uv_fs_event_t *handle, const char *filename, int events, int status)
+}void on_new_file_created(uv_fs_event_t *handle, const char *filename, int events, int status)
 {
     if (filename == NULL)
         return;
@@ -94,7 +93,7 @@ void on_new_file_created(uv_fs_event_t *handle, const char *filename, int events
         char full_path[512];
         snprintf(full_path, sizeof(full_path), "%s/%s", directory, filename);
 
-        sleep(1); // Poczekaj, aż plik się zapisze
+        sleep(1); 
 
         struct stat file_stat;
         if (stat(full_path, &file_stat) != 0 || !S_ISREG(file_stat.st_mode))
@@ -102,24 +101,19 @@ void on_new_file_created(uv_fs_event_t *handle, const char *filename, int events
 
         printf("New file detected: %s\n", full_path);
 
-        // Tworzymy katalog ./processing jeśli nie istnieje
         create_directory_if_not_exists("./processing");
 
-        // Ścieżka docelowa do ./processing
         char dest_path[512];
         snprintf(dest_path, sizeof(dest_path), "./processing/%s", filename);
 
-        // Kopiowanie pliku
         FILE *src = fopen(full_path, "rb");
-        if (!src)
-        {
+        if (!src) {
             perror("Failed to open source file");
             return;
         }
 
         FILE *dst = fopen(dest_path, "wb");
-        if (!dst)
-        {
+        if (!dst) {
             perror("Failed to open destination file");
             fclose(src);
             return;
@@ -137,7 +131,20 @@ void on_new_file_created(uv_fs_event_t *handle, const char *filename, int events
 
         printf("Copied to processing: %s\n", dest_path);
 
-        // Wysyłka do Telegrama
+        struct stat dest_stat;
+        if (stat(dest_path, &dest_stat) != 0)
+        {
+            perror("Failed to stat copied file");
+            return;
+        }
+
+        if (dest_stat.st_size < 102400)
+        {
+            printf("File too small (<100KB), deleting: %s\n", dest_path);
+            remove(dest_path);
+            return;
+        }
+
         send_to_telegram(dest_path, BOT_TOKEN, CHAT_IDS);
     }
 }
