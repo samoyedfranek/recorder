@@ -5,6 +5,8 @@
 #include <time.h>
 #include <unistd.h>
 #include <portaudio.h>
+#include <ctype.h>
+
 #include "h/write_wav_file.h"
 #include "h/open_serial_port.h"
 #include "h/recordAudio.h"
@@ -13,6 +15,9 @@
 #define SAMPLE_RATE 48000
 #define CHANNELS 1
 #define RECORDINGS_DIR "./recordings"
+
+extern char AUDIO_INPUT_DEVICE[];
+extern char AUDIO_OUTPUT_DEVICE[];
 
 typedef struct
 {
@@ -26,6 +31,50 @@ typedef struct
     int debug_amplitude;
     int chunk_size;
 } AudioData;
+
+static int get_device_index(const char *value, int is_input)
+{
+    if (!value)
+        return paNoDevice;
+
+    // Check if numeric
+    int is_number = 1;
+    for (int i = 0; value[i]; i++)
+    {
+        if (!isdigit(value[i]))
+        {
+            is_number = 0;
+            break;
+        }
+    }
+
+    if (is_number)
+    {
+        int index = atoi(value);
+        const PaDeviceInfo *info = Pa_GetDeviceInfo(index);
+        if (info && ((is_input && info->maxInputChannels > 0) || (!is_input && info->maxOutputChannels > 0)))
+        {
+            return index;
+        }
+        return paNoDevice;
+    }
+
+    // Search by name substring
+    int numDevices = Pa_GetDeviceCount();
+    for (int i = 0; i < numDevices; i++)
+    {
+        const PaDeviceInfo *info = Pa_GetDeviceInfo(i);
+        if (info && strstr(info->name, value))
+        {
+            if ((is_input && info->maxInputChannels > 0) || (!is_input && info->maxOutputChannels > 0))
+            {
+                return i;
+            }
+        }
+    }
+
+    return paNoDevice;
+}
 
 static int audioCallback(const void *inputBuffer, void *outputBuffer,
                          unsigned long framesPerBuffer,
@@ -149,7 +198,7 @@ void recorder(const char *com_port)
 
     if (load_env(".env") != 0)
     {
-        printf("Failed to load config\n");
+        fprintf(stderr, "Failed to load config\n");
         return;
     }
 
@@ -167,15 +216,17 @@ void recorder(const char *com_port)
         return;
     }
 
-    PaStreamParameters inputParams;
-    inputParams.device = Pa_GetDefaultInputDevice();
-    if (inputParams.device == paNoDevice)
+    const char *input_value = AUDIO_INPUT_DEVICE;
+    int input_device_index = get_device_index(input_value, 1);
+    if (input_device_index == paNoDevice)
     {
-        fprintf(stderr, "No default input device.\n");
+        fprintf(stderr, "Invalid input device: %s\n", input_value);
         Pa_Terminate();
         return;
     }
 
+    PaStreamParameters inputParams;
+    inputParams.device = input_device_index;
     inputParams.channelCount = CHANNELS;
     inputParams.sampleFormat = paInt16;
     inputParams.suggestedLatency = Pa_GetDeviceInfo(inputParams.device)->defaultLowInputLatency;
