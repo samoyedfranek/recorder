@@ -16,9 +16,6 @@
 #define CHANNELS 1
 #define RECORDINGS_DIR "./recordings"
 
-extern char AUDIO_INPUT_DEVICE[];
-extern char AUDIO_OUTPUT_DEVICE[];
-
 typedef struct
 {
     short *buffer;
