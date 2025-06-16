@@ -3,11 +3,6 @@
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
-#include <portaudio.h>
-#include <portaudio.h>
-
-int AUDIO_INPUT_DEVICE_ID = -1;
-int AUDIO_OUTPUT_DEVICE_ID = -1;
 
 // Config variables with default/empty values
 char BOT_TOKEN[256] = "";
@@ -29,41 +24,6 @@ bool LIVE_LISTEN = false;
 char EXTRA_TEXT[64] = "";
 int SILENCE_THRESHOLD = 0;
 int REMOVE_LAST_SECONDS = 0;
-int get_device_index_by_name(const char *device_name, int is_input)
-{
-    int numDevices = Pa_GetDeviceCount();
-    if (numDevices < 0)
-    {
-        fprintf(stderr, "ERROR: Pa_GetDeviceCount returned %d\n", numDevices);
-        return -1;
-    }
-    const PaDeviceInfo *deviceInfo;
-
-    for (int i = 0; i < numDevices; i++)
-    {
-        deviceInfo = Pa_GetDeviceInfo(i);
-        if (!deviceInfo)
-            continue;
-        const char *name = deviceInfo->name;
-        int hasInput = deviceInfo->maxInputChannels > 0;
-        int hasOutput = deviceInfo->maxOutputChannels > 0;
-        if (name && strstr(name, device_name) != NULL)
-        {
-            if (is_input && hasInput)
-            {
-                return i;
-            }
-            else if (!is_input && hasOutput)
-            {
-                return i;
-            }
-        }
-    }
-
-    printf("No suitable %s device found matching name \"%s\"\n",
-           is_input ? "input" : "output", device_name);
-    return -1; // Not found
-}
 
 // Free previously allocated CHAT_IDS strings to prevent memory leaks
 void free_chat_ids()
@@ -166,7 +126,7 @@ int load_env(const char *filename)
         perror("Failed to open env file");
         return 1;
     }
-    // Pa_Initialize();
+
     char line[512];
     while (fgets(line, sizeof(line), file))
     {
@@ -216,13 +176,11 @@ int load_env(const char *filename)
         {
             strncpy(AUDIO_INPUT_DEVICE, value, sizeof(AUDIO_INPUT_DEVICE) - 1);
             AUDIO_INPUT_DEVICE[sizeof(AUDIO_INPUT_DEVICE) - 1] = '\0';
-            // AUDIO_INPUT_DEVICE_ID = get_device_index_by_name(AUDIO_INPUT_DEVICE, 1);
         }
         else if (strcmp(key, "AUDIO_OUTPUT_DEVICE") == 0)
         {
             strncpy(AUDIO_OUTPUT_DEVICE, value, sizeof(AUDIO_OUTPUT_DEVICE) - 1);
             AUDIO_OUTPUT_DEVICE[sizeof(AUDIO_OUTPUT_DEVICE) - 1] = '\0';
-            // AUDIO_OUTPUT_DEVICE_ID = get_device_index_by_name(AUDIO_OUTPUT_DEVICE, 0);
         }
         else if (strcmp(key, "USER_NAME") == 0)
         {
@@ -276,7 +234,7 @@ int load_env(const char *filename)
     }
 
     fclose(file);
-    // Pa_Terminate();
+
     // After loading, parse CHAT_ID string into CHAT_IDS array
     parse_chat_id_array(CHAT_ID);
 

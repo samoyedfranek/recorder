@@ -168,8 +168,8 @@ void recorder(const char *com_port)
     }
 
     PaStreamParameters inputParams;
-    inputParams.device = 0;
-                             inputParams.channelCount = CHANNELS;
+    inputParams.device = AUDIO_INPUT_DEVICE;
+    inputParams.channelCount = CHANNELS;
     inputParams.sampleFormat = paInt16;
     inputParams.suggestedLatency = Pa_GetDeviceInfo(inputParams.device)->defaultLowInputLatency;
     inputParams.hostApiSpecificStreamInfo = NULL;
