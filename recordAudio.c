@@ -1,4 +1,3 @@
-#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -83,7 +82,7 @@ static int get_device_index(const char *value, int is_input)
     for (int i = 0; i < numDevices; i++)
     {
         const PaDeviceInfo *info = Pa_GetDeviceInfo(i);
-        if (info && strcasestr(info->name, value))
+        if (info && strcasestr_local(info->name, value))
         {
             if ((is_input && info->maxInputChannels > 0) || (!is_input && info->maxOutputChannels > 0))
             {
