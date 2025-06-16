@@ -6,7 +6,7 @@
 #include <unistd.h>
 #include <portaudio.h>
 #include <ctype.h>
-#include <strings.h>
+#include <strings.h>  // for strcasecmp
 
 #include "h/write_wav_file.h"
 #include "h/open_serial_port.h"
@@ -30,56 +30,24 @@ typedef struct
     int chunk_size;
 } AudioData;
 
-
-void list_input_devices()
-{
-    int numDevices = Pa_GetDeviceCount();
-    if (numDevices < 0)
-    {
-        fprintf(stderr, "ERROR: Pa_GetDeviceCount returned %d\n", numDevices);
-        return;
-    }
-
-    printf("Available input devices:\n");
-    for (int i = 0; i < numDevices; i++)
-    {
-        const PaDeviceInfo *deviceInfo = Pa_GetDeviceInfo(i);
-        if (deviceInfo && deviceInfo->maxInputChannels > 0)
-        {
-            printf("  %d: %s\n", i, deviceInfo->name);
-        }
-    }
-}
-
-// Find device index by exact (case-insensitive) name for input or output devices
-int get_device_index(const char *device_name, int is_input)
-{
-    int numDevices = Pa_GetDeviceCount();
-    if (numDevices < 0)
-    {
-        fprintf(stderr, "ERROR: Pa_GetDeviceCount returned %d\n", numDevices);
+// Find input device index by name (case-insensitive)
+int get_input_device_index_by_name(const char *device_name) {
+    int deviceCount = Pa_GetDeviceCount();
+    if (deviceCount < 0) {
+        fprintf(stderr, "ERROR: Pa_GetDeviceCount returned %d\n", deviceCount);
         return paNoDevice;
     }
 
-    for (int i = 0; i < numDevices; i++)
-    {
-        const PaDeviceInfo *deviceInfo = Pa_GetDeviceInfo(i);
-        if (!deviceInfo)
-            continue;
-
-        if (is_input && deviceInfo->maxInputChannels < 1)
-            continue;
-        if (!is_input && deviceInfo->maxOutputChannels < 1)
-            continue;
-
-        if (strcasecmp(deviceInfo->name, device_name) == 0)
-        {
-            return i;
+    for (int i = 0; i < deviceCount; i++) {
+        const PaDeviceInfo *info = Pa_GetDeviceInfo(i);
+        if (info && info->maxInputChannels > 0) {
+            if (strcasecmp(info->name, device_name) == 0) {
+                return i; // Found exact match
+            }
         }
     }
-    return paNoDevice;
+    return paNoDevice; // Not found
 }
-
 
 static int audioCallback(const void *inputBuffer, void *outputBuffer,
                          unsigned long framesPerBuffer,
@@ -125,7 +93,7 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
                 printf("Sound confirmed. Recording started.\n");
                 data->recording = 1;
                 data->size = 0;
-                data->capacity = SAMPLE_RATE * 10; // initial 10 seconds buffer
+                data->capacity = SAMPLE_RATE * 10; // allocate 10 seconds initially
                 data->buffer = (short *)malloc(data->capacity * sizeof(short));
                 if (!data->buffer)
                 {
@@ -155,7 +123,7 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
             data->buffer = new_buffer;
         }
 
-        memcpy(data->buffer + data->size, input, framesPerBuffer * sizeof(short));
+        memcpy(data->buffer + data->size, input, framesPerBuffer * sizeof(short)); // append data
         data->size += framesPerBuffer;
 
         if (max_amplitude > data->amplitude_threshold)
@@ -231,14 +199,11 @@ void recorder(const char *com_port)
         return;
     }
 
-    // List input devices for debugging
-    list_input_devices();
-
-    const char *input_value = AUDIO_INPUT_DEVICE;
-    int input_device_index = get_device_index(input_value, 1);
+    // Get device index by name
+    int input_device_index = get_input_device_index_by_name(AUDIO_INPUT_DEVICE);
     if (input_device_index == paNoDevice)
     {
-        fprintf(stderr, "Invalid input device: %s\n", input_value);
+        fprintf(stderr, "Input device '%s' not found!\n", AUDIO_INPUT_DEVICE);
         Pa_Terminate();
         return;
     }
