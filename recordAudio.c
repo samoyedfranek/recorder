@@ -5,8 +5,6 @@
 #include <time.h>
 #include <unistd.h>
 #include <portaudio.h>
-#include <ctype.h>
-
 #include "h/write_wav_file.h"
 #include "h/open_serial_port.h"
 #include "h/recordAudio.h"
@@ -64,9 +62,8 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
         printf("Recording started.\n");
         data->recording = 1;
         data->size = 0;
-        data->capacity = framesPerBuffer;
+        data->capacity = SAMPLE_RATE * 10;
         data->buffer = (short *)malloc(data->capacity * sizeof(short));
-
         if (!data->buffer)
         {
             fprintf(stderr, "Memory allocation failed!\n");
@@ -106,26 +103,31 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
             }
             else
             {
-                printf("Recording too short to trim. Skipping trim.\n");
+                data->size = 0;
             }
 
-            char filename[256], final_file_path[256];
-            char time_str[64];
-            time_t now = time(NULL);
-            struct tm *t = localtime(&now);
-            strftime(time_str, sizeof(time_str), "%Y%m%d_%H%M%S", t);
-            snprintf(filename, sizeof(filename), "%s_%s.wav", data->serial_name, time_str);
-            snprintf(final_file_path, sizeof(final_file_path), RECORDINGS_DIR "/%s", filename);
-
-            printf("Captured %zu samples (%.2f seconds)\n", data->size, (float)data->size / SAMPLE_RATE);
-
-            if (write_wav_file(final_file_path, data->buffer, data->size, SAMPLE_RATE) == 0)
+            if (data->size > 0)
             {
-                printf("Recording saved: %s\n", final_file_path);
+                char filename[256], final_file_path[256];
+                char time_str[64];
+                time_t now = time(NULL);
+                struct tm *t = localtime(&now);
+                strftime(time_str, sizeof(time_str), "%Y%m%d_%H%M%S", t);
+                snprintf(filename, sizeof(filename), "%s_%s.wav", data->serial_name, time_str);
+                snprintf(final_file_path, sizeof(final_file_path), RECORDINGS_DIR "/%s", filename);
+
+                if (write_wav_file(final_file_path, data->buffer, data->size, SAMPLE_RATE) == 0)
+                {
+                    printf("Recording saved: %s\n", final_file_path);
+                }
+                else
+                {
+                    fprintf(stderr, "Failed to write WAV file.\n");
+                }
             }
             else
             {
-                fprintf(stderr, "Failed to write WAV file.\n");
+                printf("Recording too short, skipping save.\n");
             }
 
             free(data->buffer);
@@ -147,7 +149,7 @@ void recorder(const char *com_port)
 
     if (load_env(".env") != 0)
     {
-        fprintf(stderr, "Failed to load config\n");
+        printf("Failed to load config\n");
         return;
     }
 
@@ -166,8 +168,8 @@ void recorder(const char *com_port)
     }
 
     PaStreamParameters inputParams;
-    inputParams.device = AUDIO_INPUT_DEVICE_ID;
-    inputParams.channelCount = CHANNELS;
+    inputParams.device = AUDIO_INPUT_DEVICE_ID
+                             inputParams.channelCount = CHANNELS;
     inputParams.sampleFormat = paInt16;
     inputParams.suggestedLatency = Pa_GetDeviceInfo(inputParams.device)->defaultLowInputLatency;
     inputParams.hostApiSpecificStreamInfo = NULL;
