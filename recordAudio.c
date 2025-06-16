@@ -193,13 +193,6 @@ void recorder(const char *com_port)
         Pa_Terminate();
         return;
     }
-    int numDevices = Pa_GetDeviceCount();
-    for (int i = 0; i < numDevices; i++)
-    {
-        const PaDeviceInfo *info = Pa_GetDeviceInfo(i);
-        printf("Device %d: %s (maxInputChannels: %d)\n", i, info->name, info->maxInputChannels);
-    }
-
     inputParams.channelCount = CHANNELS;
     inputParams.sampleFormat = paInt16;
     inputParams.suggestedLatency = Pa_GetDeviceInfo(inputParams.device)->defaultLowInputLatency;
