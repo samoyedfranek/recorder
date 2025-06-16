@@ -168,7 +168,14 @@ void recorder(const char *com_port)
     }
 
     PaStreamParameters inputParams;
-    inputParams.device = AUDIO_INPUT_DEVICE;
+    inputParams.device = Pa_GetDefaultInputDevice();
+    if (inputParams.device == paNoDevice)
+    {
+        fprintf(stderr, "No default input device.\n");
+        Pa_Terminate();
+        return;
+    }
+
     inputParams.channelCount = CHANNELS;
     inputParams.sampleFormat = paInt16;
     inputParams.suggestedLatency = Pa_GetDeviceInfo(inputParams.device)->defaultLowInputLatency;
