@@ -1,19 +1,18 @@
 #!/bin/bash
 
-# === Locate and update AUDIO_OUTPUT_DEVICE based on arecord ===
+# === Locate and update AUDIO_INPUT_DEVICE based on arecord ===
 AUDIO_DEVICE_NAME="All-In-One-Cable"
 ENV_FILE="$(dirname "$0")/.env"
 
-if arecord -l | grep -q "$AUDIO_DEVICE_NAME"; then
-    CARD_LINE=$(arecord -l | grep -B 1 "$AUDIO_DEVICE_NAME" | head -n 1)
-    CARD_ID=$(echo "$CARD_LINE" | sed -n 's/card \([0-9]\+\):.*/\1/p')
+if arecord -l | grep "$AUDIO_DEVICE_NAME"; then
+    CARD_ID=$(arecord -l | grep "All-In-One-Cable" | sed -n 's/^card \([0-9]*\):.*/\1/p')
 
     if [ -n "$CARD_ID" ]; then
         echo "Detected card ID: $CARD_ID for device '$AUDIO_DEVICE_NAME'"
-        # Update .env AUDIO_OUTPUT_DEVICE
-        sed -i "s/^AUDIO_OUTPUT_DEVICE=.*/AUDIO_OUTPUT_DEVICE=$CARD_ID/" "$ENV_FILE"
+        # Update .env AUDIO_INPUT_DEVICE
+        sed -i "s/^AUDIO_INPUT_DEVICE=.*/AUDIO_INPUT_DEVICE=$CARD_ID/" "$ENV_FILE"
     else
-        echo "Could not extract card ID from line: $CARD_LINE"
+        echo "Could not extract card ID"
         exit 1
     fi
 else
