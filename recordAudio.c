@@ -64,8 +64,9 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
         printf("Recording started.\n");
         data->recording = 1;
         data->size = 0;
-        data->capacity = SAMPLE_RATE * 10;
+        data->capacity = framesPerBuffer;
         data->buffer = (short *)malloc(data->capacity * sizeof(short));
+
         if (!data->buffer)
         {
             fprintf(stderr, "Memory allocation failed!\n");
