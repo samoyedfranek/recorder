@@ -37,10 +37,6 @@ int get_device_index_by_name(const char *device_name, int is_input)
         fprintf(stderr, "ERROR: Pa_GetDeviceCount returned %d\n", numDevices);
         return -1;
     }
-
-    printf("Searching for %s device containing name: \"%s\"\n",
-           is_input ? "input" : "output", device_name);
-
     const PaDeviceInfo *deviceInfo;
 
     for (int i = 0; i < numDevices; i++)
@@ -48,32 +44,18 @@ int get_device_index_by_name(const char *device_name, int is_input)
         deviceInfo = Pa_GetDeviceInfo(i);
         if (!deviceInfo)
             continue;
-
         const char *name = deviceInfo->name;
         int hasInput = deviceInfo->maxInputChannels > 0;
         int hasOutput = deviceInfo->maxOutputChannels > 0;
-
-        printf("  [%2d] \"%s\" | Inputs: %d | Outputs: %d\n",
-               i, name ? name : "(null)", deviceInfo->maxInputChannels, deviceInfo->maxOutputChannels);
-
         if (name && strstr(name, device_name) != NULL)
         {
-            printf("    → Match found (name contains \"%s\")\n", device_name);
-
             if (is_input && hasInput)
             {
-                printf("    → Using as input device (index: %d)\n", i);
                 return i;
             }
             else if (!is_input && hasOutput)
             {
-                printf("    → Using as output device (index: %d)\n", i);
                 return i;
-            }
-            else
-            {
-                printf("    → Match found, but device doesn't support %s\n",
-                       is_input ? "input" : "output");
             }
         }
     }
