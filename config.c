@@ -166,7 +166,7 @@ int load_env(const char *filename)
         perror("Failed to open env file");
         return 1;
     }
-
+Pa_Initialize();
     char line[512];
     while (fgets(line, sizeof(line), file))
     {
@@ -216,19 +216,13 @@ int load_env(const char *filename)
         {
             strncpy(AUDIO_INPUT_DEVICE, value, sizeof(AUDIO_INPUT_DEVICE) - 1);
             AUDIO_INPUT_DEVICE[sizeof(AUDIO_INPUT_DEVICE) - 1] = '\0';
-
-            Pa_Initialize();
             AUDIO_INPUT_DEVICE_ID = get_device_index_by_name(AUDIO_INPUT_DEVICE, 1);
-            Pa_Terminate();
         }
         else if (strcmp(key, "AUDIO_OUTPUT_DEVICE") == 0)
         {
             strncpy(AUDIO_OUTPUT_DEVICE, value, sizeof(AUDIO_OUTPUT_DEVICE) - 1);
             AUDIO_OUTPUT_DEVICE[sizeof(AUDIO_OUTPUT_DEVICE) - 1] = '\0';
-
-            Pa_Initialize();
             AUDIO_OUTPUT_DEVICE_ID = get_device_index_by_name(AUDIO_OUTPUT_DEVICE, 0);
-            Pa_Terminate();
         }
         else if (strcmp(key, "USER_NAME") == 0)
         {
@@ -282,7 +276,7 @@ int load_env(const char *filename)
     }
 
     fclose(file);
-
+    Pa_Terminate();
     // After loading, parse CHAT_ID string into CHAT_IDS array
     parse_chat_id_array(CHAT_ID);
 
