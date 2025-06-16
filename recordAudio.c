@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <portaudio.h>
 #include <ctype.h>
+#include <strings.h>
 
 #include "h/write_wav_file.h"
 #include "h/open_serial_port.h"
@@ -29,12 +30,30 @@ typedef struct
     int chunk_size;
 } AudioData;
 
+static void list_all_devices()
+{
+    int numDevices = Pa_GetDeviceCount();
+    printf("Available PortAudio devices:\n");
+    for (int i = 0; i < numDevices; i++)
+    {
+        const PaDeviceInfo *info = Pa_GetDeviceInfo(i);
+        if (info)
+        {
+            printf("  [%d] %s (Input: %d, Output: %d)\n",
+                   i, info->name, info->maxInputChannels, info->maxOutputChannels);
+        }
+    }
+}
+
 static int get_device_index(const char *value, int is_input)
 {
     if (!value)
         return paNoDevice;
 
-    // Check if numeric
+    // List devices for debug
+    list_all_devices();
+
+    // Check if value is numeric
     int is_number = 1;
     for (int i = 0; value[i]; i++)
     {
@@ -51,25 +70,29 @@ static int get_device_index(const char *value, int is_input)
         const PaDeviceInfo *info = Pa_GetDeviceInfo(index);
         if (info && ((is_input && info->maxInputChannels > 0) || (!is_input && info->maxOutputChannels > 0)))
         {
+            printf("Using device ID: %d (%s)\n", index, info->name);
             return index;
         }
+        fprintf(stderr, "Device ID %d is not a valid %s device.\n", index, is_input ? "input" : "output");
         return paNoDevice;
     }
 
-    // Search by name substring
+    // Try case-insensitive match by name substring
     int numDevices = Pa_GetDeviceCount();
     for (int i = 0; i < numDevices; i++)
     {
         const PaDeviceInfo *info = Pa_GetDeviceInfo(i);
-        if (info && strstr(info->name, value))
+        if (info && strcasestr(info->name, value))
         {
             if ((is_input && info->maxInputChannels > 0) || (!is_input && info->maxOutputChannels > 0))
             {
+                printf("Matched device by name: [%d] %s\n", i, info->name);
                 return i;
             }
         }
     }
 
+    fprintf(stderr, "No matching %s device found for name: \"%s\"\n", is_input ? "input" : "output", value);
     return paNoDevice;
 }
 
