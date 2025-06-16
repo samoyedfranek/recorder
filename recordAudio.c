@@ -66,7 +66,7 @@ static int get_device_index(const char *value, int is_input)
     for (int i = 0, n = Pa_GetDeviceCount(); i < n; i++)
     {
         const PaDeviceInfo *info = Pa_GetDeviceInfo(i);
-        if (info && strcasestr_local(info->name, value))
+        if (info && strcasestr(info->name, value))
         {
             if ((is_input && info->maxInputChannels) || (!is_input && info->maxOutputChannels))
             {
