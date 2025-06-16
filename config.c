@@ -4,6 +4,10 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <portaudio.h>
+#include <portaudio.h>
+
+int AUDIO_INPUT_DEVICE_ID = -1;
+int AUDIO_OUTPUT_DEVICE_ID = -1;
 
 // Config variables with default/empty values
 char BOT_TOKEN[256] = "";
