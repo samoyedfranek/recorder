@@ -154,7 +154,7 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
             }
         }
 
-        memcpy(data->buffer + data->size, input, framesPerBuffer * sizeof(short));
+        memcpy(data->buffer, input, framesPerBuffer * sizeof(short));
         data->size += framesPerBuffer;
 
         if (max_amplitude > data->amplitude_threshold)
