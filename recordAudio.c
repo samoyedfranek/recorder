@@ -168,23 +168,36 @@ void recorder(const char *com_port)
     }
 
     PaStreamParameters inputParams;
-
-    // Fallback to default device if AUDIO_INPUT_DEVICE is invalid
     if (AUDIO_INPUT_DEVICE < 0 || AUDIO_INPUT_DEVICE >= Pa_GetDeviceCount())
     {
+        fprintf(stderr, "Invalid AUDIO_INPUT_DEVICE index (%d). Falling back to default.\n", AUDIO_INPUT_DEVICE);
         inputParams.device = Pa_GetDefaultInputDevice();
-        if (inputParams.device == paNoDevice)
-        {
-            fprintf(stderr, "No default input device found.\n");
-            Pa_Terminate();
-            return;
-        }
-        printf("Using default input device: %d (%s)\n", inputParams.device,
-               Pa_GetDeviceInfo(inputParams.device)->name);
     }
     else
     {
-        inputParams.device = AUDIO_INPUT_DEVICE;
+        const PaDeviceInfo *info = Pa_GetDeviceInfo(AUDIO_INPUT_DEVICE);
+        if (info == NULL || info->maxInputChannels < CHANNELS)
+        {
+            fprintf(stderr, "Specified AUDIO_INPUT_DEVICE (%d) not suitable (null or too few input channels). Falling back to default.\n", AUDIO_INPUT_DEVICE);
+            inputParams.device = Pa_GetDefaultInputDevice();
+        }
+        else
+        {
+            inputParams.device = AUDIO_INPUT_DEVICE;
+        }
+    }
+
+    if (inputParams.device == paNoDevice)
+    {
+        fprintf(stderr, "No default input device.\n");
+        Pa_Terminate();
+        return;
+    }
+    int numDevices = Pa_GetDeviceCount();
+    for (int i = 0; i < numDevices; i++)
+    {
+        const PaDeviceInfo *info = Pa_GetDeviceInfo(i);
+        printf("Device %d: %s (maxInputChannels: %d)\n", i, info->name, info->maxInputChannels);
     }
 
     inputParams.channelCount = CHANNELS;
