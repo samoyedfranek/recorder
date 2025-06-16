@@ -6,7 +6,6 @@
 #include <unistd.h>
 #include <portaudio.h>
 #include <ctype.h>
-#include <strings.h>  // for strcasecmp
 
 #include "h/write_wav_file.h"
 #include "h/open_serial_port.h"
@@ -16,9 +15,6 @@
 #define SAMPLE_RATE 48000
 #define CHANNELS 1
 #define RECORDINGS_DIR "./recordings"
-
-extern char AUDIO_INPUT_DEVICE[];
-extern char AUDIO_OUTPUT_DEVICE[];
 
 typedef struct
 {
@@ -33,25 +29,6 @@ typedef struct
     int chunk_size;
 } AudioData;
 
-// Find input device index by name (case-insensitive)
-int get_input_device_index_by_name(const char *device_name) {
-    int deviceCount = Pa_GetDeviceCount();
-    if (deviceCount < 0) {
-        fprintf(stderr, "ERROR: Pa_GetDeviceCount returned %d\n", deviceCount);
-        return paNoDevice;
-    }
-
-    for (int i = 0; i < deviceCount; i++) {
-        const PaDeviceInfo *info = Pa_GetDeviceInfo(i);
-        if (info && info->maxInputChannels > 0) {
-            if (strcasecmp(info->name, device_name) == 0) {
-                return i; // Found exact match
-            }
-        }
-    }
-    return paNoDevice; // Not found
-}
-
 static int audioCallback(const void *inputBuffer, void *outputBuffer,
                          unsigned long framesPerBuffer,
                          const PaStreamCallbackTimeInfo *timeInfo,
@@ -61,13 +38,9 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
     AudioData *data = (AudioData *)userData;
     const short *input = (const short *)inputBuffer;
 
-    static int sound_confidence = 0;
-    const int confidence_threshold = 3; // require 3 consecutive loud chunks
-
     if (!input)
     {
-        if (data->debug_amplitude)
-            fprintf(stderr, "Warning: input buffer is NULL!\n");
+        fprintf(stderr, "No input detected!\n");
         return paContinue;
     }
 
@@ -86,47 +59,34 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
 
     time_t current_time = time(NULL);
 
-    if (!data->recording)
+    if (max_amplitude > data->amplitude_threshold && !data->recording)
     {
-        if (max_amplitude > data->amplitude_threshold)
+        printf("Recording started.\n");
+        data->recording = 1;
+        data->size = 0;
+        data->capacity = SAMPLE_RATE * 10;
+        data->buffer = (short *)malloc(data->capacity * sizeof(short));
+        if (!data->buffer)
         {
-            sound_confidence++;
-            if (sound_confidence >= confidence_threshold)
-            {
-                printf("Sound confirmed. Recording started.\n");
-                data->recording = 1;
-                data->size = 0;
-                data->capacity = SAMPLE_RATE * 10; // allocate 10 seconds initially
-                data->buffer = (short *)malloc(data->capacity * sizeof(short));
-                if (!data->buffer)
-                {
-                    fprintf(stderr, "Memory allocation failed!\n");
-                    return paAbort;
-                }
-                data->last_sound_time = current_time;
-                sound_confidence = 0;
-            }
+            fprintf(stderr, "Memory allocation failed!\n");
+            return paAbort;
         }
-        else
-        {
-            sound_confidence = 0;
-        }
+        data->last_sound_time = current_time;
     }
+
     if (data->recording)
     {
         if (data->size + framesPerBuffer > data->capacity)
         {
             data->capacity *= 2;
-            short *new_buffer = realloc(data->buffer, data->capacity * sizeof(short));
-            if (!new_buffer)
+            data->buffer = realloc(data->buffer, data->capacity * sizeof(short));
+            if (!data->buffer)
             {
                 fprintf(stderr, "Memory reallocation failed!\n");
                 return paAbort;
             }
-            data->buffer = new_buffer;
         }
-
-        memcpy(data->buffer + data->size, input, framesPerBuffer * sizeof(short)); // append data
+        memcpy(data->buffer + data->size, input, framesPerBuffer * sizeof(short));
         data->size += framesPerBuffer;
 
         if (max_amplitude > data->amplitude_threshold)
@@ -148,21 +108,28 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
                 data->size = 0;
             }
 
-            char filename[256], final_file_path[256];
-            char time_str[64];
-            time_t now = time(NULL);
-            struct tm *t = localtime(&now);
-            strftime(time_str, sizeof(time_str), "%Y%m%d_%H%M%S", t);
-            snprintf(filename, sizeof(filename), "%s_%s.wav", data->serial_name, time_str);
-            snprintf(final_file_path, sizeof(final_file_path), RECORDINGS_DIR "/%s", filename);
-
-            if (write_wav_file(final_file_path, data->buffer, data->size, SAMPLE_RATE) == 0)
+            if (data->size > 0)
             {
-                printf("Recording saved: %s\n", final_file_path);
+                char filename[256], final_file_path[256];
+                char time_str[64];
+                time_t now = time(NULL);
+                struct tm *t = localtime(&now);
+                strftime(time_str, sizeof(time_str), "%Y%m%d_%H%M%S", t);
+                snprintf(filename, sizeof(filename), "%s_%s.wav", data->serial_name, time_str);
+                snprintf(final_file_path, sizeof(final_file_path), RECORDINGS_DIR "/%s", filename);
+
+                if (write_wav_file(final_file_path, data->buffer, data->size, SAMPLE_RATE) == 0)
+                {
+                    printf("Recording saved: %s\n", final_file_path);
+                }
+                else
+                {
+                    fprintf(stderr, "Failed to write WAV file.\n");
+                }
             }
             else
             {
-                fprintf(stderr, "Failed to write WAV file.\n");
+                printf("Recording too short, skipping save.\n");
             }
 
             free(data->buffer);
@@ -202,17 +169,8 @@ void recorder(const char *com_port)
         return;
     }
 
-    // Get device index by name
-    int input_device_index = get_input_device_index_by_name(AUDIO_INPUT_DEVICE);
-    if (input_device_index == paNoDevice)
-    {
-        fprintf(stderr, "Input device '%s' not found!\n", AUDIO_INPUT_DEVICE);
-        Pa_Terminate();
-        return;
-    }
-
     PaStreamParameters inputParams;
-    inputParams.device = input_device_index;
+    inputParams.device = AUDIO_INPUT_DEVICE;
     inputParams.channelCount = CHANNELS;
     inputParams.sampleFormat = paInt16;
     inputParams.suggestedLatency = Pa_GetDeviceInfo(inputParams.device)->defaultLowInputLatency;
