@@ -29,7 +29,6 @@ bool LIVE_LISTEN = false;
 char EXTRA_TEXT[64] = "";
 int SILENCE_THRESHOLD = 0;
 int REMOVE_LAST_SECONDS = 0;
-
 int get_device_index_by_name(const char *device_name, int is_input)
 {
     int numDevices = Pa_GetDeviceCount();
@@ -38,6 +37,9 @@ int get_device_index_by_name(const char *device_name, int is_input)
         fprintf(stderr, "ERROR: Pa_GetDeviceCount returned %d\n", numDevices);
         return -1;
     }
+
+    printf("Searching for %s device containing name: \"%s\"\n",
+           is_input ? "input" : "output", device_name);
 
     const PaDeviceInfo *deviceInfo;
 
@@ -48,19 +50,36 @@ int get_device_index_by_name(const char *device_name, int is_input)
             continue;
 
         const char *name = deviceInfo->name;
+        int hasInput = deviceInfo->maxInputChannels > 0;
+        int hasOutput = deviceInfo->maxOutputChannels > 0;
+
+        printf("  [%2d] \"%s\" | Inputs: %d | Outputs: %d\n",
+               i, name ? name : "(null)", deviceInfo->maxInputChannels, deviceInfo->maxOutputChannels);
+
         if (name && strstr(name, device_name) != NULL)
         {
-            if (is_input && deviceInfo->maxInputChannels > 0)
+            printf("    → Match found (name contains \"%s\")\n", device_name);
+
+            if (is_input && hasInput)
             {
+                printf("    → Using as input device (index: %d)\n", i);
                 return i;
             }
-            else if (!is_input && deviceInfo->maxOutputChannels > 0)
+            else if (!is_input && hasOutput)
             {
+                printf("    → Using as output device (index: %d)\n", i);
                 return i;
+            }
+            else
+            {
+                printf("    → Match found, but device doesn't support %s\n",
+                       is_input ? "input" : "output");
             }
         }
     }
 
+    printf("No suitable %s device found matching name \"%s\"\n",
+           is_input ? "input" : "output", device_name);
     return -1; // Not found
 }
 
@@ -216,7 +235,6 @@ int load_env(const char *filename)
             strncpy(AUDIO_INPUT_DEVICE, value, sizeof(AUDIO_INPUT_DEVICE) - 1);
             AUDIO_INPUT_DEVICE[sizeof(AUDIO_INPUT_DEVICE) - 1] = '\0';
 
-            // Initialize PortAudio and resolve device ID
             Pa_Initialize();
             AUDIO_INPUT_DEVICE_ID = get_device_index_by_name(AUDIO_INPUT_DEVICE, 1);
             Pa_Terminate();
@@ -226,7 +244,6 @@ int load_env(const char *filename)
             strncpy(AUDIO_OUTPUT_DEVICE, value, sizeof(AUDIO_OUTPUT_DEVICE) - 1);
             AUDIO_OUTPUT_DEVICE[sizeof(AUDIO_OUTPUT_DEVICE) - 1] = '\0';
 
-            // Initialize PortAudio and resolve device ID
             Pa_Initialize();
             AUDIO_OUTPUT_DEVICE_ID = get_device_index_by_name(AUDIO_OUTPUT_DEVICE, 0);
             Pa_Terminate();
