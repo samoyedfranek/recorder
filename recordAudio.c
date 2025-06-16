@@ -168,12 +168,23 @@ void recorder(const char *com_port)
     }
 
     PaStreamParameters inputParams;
-    inputParams.device = Pa_GetDefaultInputDevice();
-    if (inputParams.device == paNoDevice)
+
+    // Fallback to default device if AUDIO_INPUT_DEVICE is invalid
+    if (AUDIO_INPUT_DEVICE < 0 || AUDIO_INPUT_DEVICE >= Pa_GetDeviceCount())
     {
-        fprintf(stderr, "No default input device.\n");
-        Pa_Terminate();
-        return;
+        inputParams.device = Pa_GetDefaultInputDevice();
+        if (inputParams.device == paNoDevice)
+        {
+            fprintf(stderr, "No default input device found.\n");
+            Pa_Terminate();
+            return;
+        }
+        printf("Using default input device: %d (%s)\n", inputParams.device,
+               Pa_GetDeviceInfo(inputParams.device)->name);
+    }
+    else
+    {
+        inputParams.device = AUDIO_INPUT_DEVICE;
     }
 
     inputParams.channelCount = CHANNELS;
