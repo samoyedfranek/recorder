@@ -30,12 +30,34 @@ typedef struct
     int chunk_size;
 } AudioData;
 
+
+void list_input_devices()
+{
+    int numDevices = Pa_GetDeviceCount();
+    if (numDevices < 0)
+    {
+        fprintf(stderr, "ERROR: Pa_GetDeviceCount returned %d\n", numDevices);
+        return;
+    }
+
+    printf("Available input devices:\n");
+    for (int i = 0; i < numDevices; i++)
+    {
+        const PaDeviceInfo *deviceInfo = Pa_GetDeviceInfo(i);
+        if (deviceInfo && deviceInfo->maxInputChannels > 0)
+        {
+            printf("  %d: %s\n", i, deviceInfo->name);
+        }
+    }
+}
+
+// Find device index by exact (case-insensitive) name for input or output devices
 int get_device_index(const char *device_name, int is_input)
 {
     int numDevices = Pa_GetDeviceCount();
     if (numDevices < 0)
     {
-        fprintf(stderr, "ERROR: Pa_CountDevices returned 0x%x\n", numDevices);
+        fprintf(stderr, "ERROR: Pa_GetDeviceCount returned %d\n", numDevices);
         return paNoDevice;
     }
 
@@ -58,25 +80,6 @@ int get_device_index(const char *device_name, int is_input)
     return paNoDevice;
 }
 
-void list_input_devices()
-{
-    int numDevices = Pa_GetDeviceCount();
-    if (numDevices < 0)
-    {
-        fprintf(stderr, "ERROR: Pa_CountDevices returned 0x%x\n", numDevices);
-        return;
-    }
-
-    printf("Available input devices:\n");
-    for (int i = 0; i < numDevices; i++)
-    {
-        const PaDeviceInfo *deviceInfo = Pa_GetDeviceInfo(i);
-        if (deviceInfo && deviceInfo->maxInputChannels > 0)
-        {
-            printf("  %d: %s\n", i, deviceInfo->name);
-        }
-    }
-}
 
 static int audioCallback(const void *inputBuffer, void *outputBuffer,
                          unsigned long framesPerBuffer,
@@ -122,7 +125,7 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
                 printf("Sound confirmed. Recording started.\n");
                 data->recording = 1;
                 data->size = 0;
-                data->capacity = SAMPLE_RATE * 10;
+                data->capacity = SAMPLE_RATE * 10; // initial 10 seconds buffer
                 data->buffer = (short *)malloc(data->capacity * sizeof(short));
                 if (!data->buffer)
                 {
@@ -152,7 +155,7 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
             data->buffer = new_buffer;
         }
 
-        memcpy(data->buffer + data->size, input, framesPerBuffer * sizeof(short)); // append, not overwrite
+        memcpy(data->buffer + data->size, input, framesPerBuffer * sizeof(short));
         data->size += framesPerBuffer;
 
         if (max_amplitude > data->amplitude_threshold)
@@ -227,6 +230,9 @@ void recorder(const char *com_port)
         fprintf(stderr, "PortAudio init error: %s\n", Pa_GetErrorText(err));
         return;
     }
+
+    // List input devices for debugging
+    list_input_devices();
 
     const char *input_value = AUDIO_INPUT_DEVICE;
     int input_device_index = get_device_index(input_value, 1);
