@@ -152,28 +152,21 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
                 data->size = 0;
             }
 
-            if (data->size > 0)
-            {
-                char filename[256], final_file_path[256];
-                char time_str[64];
-                time_t now = time(NULL);
-                struct tm *t = localtime(&now);
-                strftime(time_str, sizeof(time_str), "%Y%m%d_%H%M%S", t);
-                snprintf(filename, sizeof(filename), "%s_%s.wav", data->serial_name, time_str);
-                snprintf(final_file_path, sizeof(final_file_path), RECORDINGS_DIR "/%s", filename);
+            char filename[256], final_file_path[256];
+            char time_str[64];
+            time_t now = time(NULL);
+            struct tm *t = localtime(&now);
+            strftime(time_str, sizeof(time_str), "%Y%m%d_%H%M%S", t);
+            snprintf(filename, sizeof(filename), "%s_%s.wav", data->serial_name, time_str);
+            snprintf(final_file_path, sizeof(final_file_path), RECORDINGS_DIR "/%s", filename);
 
-                if (write_wav_file(final_file_path, data->buffer, data->size, SAMPLE_RATE) == 0)
-                {
-                    printf("Recording saved: %s\n", final_file_path);
-                }
-                else
-                {
-                    fprintf(stderr, "Failed to write WAV file.\n");
-                }
+            if (write_wav_file(final_file_path, data->buffer, data->size, SAMPLE_RATE) == 0)
+            {
+                printf("Recording saved: %s\n", final_file_path);
             }
             else
             {
-                printf("Recording too short, skipping save.\n");
+                fprintf(stderr, "Failed to write WAV file.\n");
             }
 
             free(data->buffer);
