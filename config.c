@@ -174,13 +174,11 @@ int load_env(const char *filename)
         }
         else if (strcmp(key, "AUDIO_INPUT_DEVICE") == 0)
         {
-            strncpy(AUDIO_INPUT_DEVICE, value, sizeof(AUDIO_INPUT_DEVICE) - 1);
-            AUDIO_INPUT_DEVICE[sizeof(AUDIO_INPUT_DEVICE) - 1] = '\0';
+            AUDIO_INPUT_DEVICE = parse_int(value);
         }
         else if (strcmp(key, "AUDIO_OUTPUT_DEVICE") == 0)
         {
-            strncpy(AUDIO_OUTPUT_DEVICE, value, sizeof(AUDIO_OUTPUT_DEVICE) - 1);
-            AUDIO_OUTPUT_DEVICE[sizeof(AUDIO_OUTPUT_DEVICE) - 1] = '\0';
+            AUDIO_OUTPUT_DEVICE = parse_int(value);
         }
         else if (strcmp(key, "USER_NAME") == 0)
         {
