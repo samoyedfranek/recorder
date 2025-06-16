@@ -105,10 +105,10 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
             }
             else
             {
-                data->size = 0;
+                printf("Recording too short to trim. Skipping trim.\n");
             }
 
-            if (data->size > 0)
+            if (data->size >= SAMPLE_RATE / 2) // Require at least 0.5s of audio
             {
                 char filename[256], final_file_path[256];
                 char time_str[64];
@@ -117,6 +117,8 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
                 strftime(time_str, sizeof(time_str), "%Y%m%d_%H%M%S", t);
                 snprintf(filename, sizeof(filename), "%s_%s.wav", data->serial_name, time_str);
                 snprintf(final_file_path, sizeof(final_file_path), RECORDINGS_DIR "/%s", filename);
+
+                printf("Captured %zu samples (%.2f seconds)\n", data->size, (float)data->size / SAMPLE_RATE);
 
                 if (write_wav_file(final_file_path, data->buffer, data->size, SAMPLE_RATE) == 0)
                 {
@@ -129,7 +131,7 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
             }
             else
             {
-                printf("Recording too short, skipping save.\n");
+                printf("Recording too short or empty, skipping save.\n");
             }
 
             free(data->buffer);
