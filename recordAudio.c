@@ -30,54 +30,52 @@ typedef struct
     int chunk_size;
 } AudioData;
 
-static void list_all_devices()
+int get_device_index(const char *device_name, int is_input)
 {
-    printf("Available PortAudio devices:\n");
-    for (int i = 0, n = Pa_GetDeviceCount(); i < n; i++)
+    int numDevices = Pa_GetDeviceCount();
+    if (numDevices < 0)
     {
-        const PaDeviceInfo *info = Pa_GetDeviceInfo(i);
-        if (info)
-            printf("  [%d] %s (Input: %d, Output: %d)\n", i, info->name, info->maxInputChannels, info->maxOutputChannels);
+        fprintf(stderr, "ERROR: Pa_CountDevices returned 0x%x\n", numDevices);
+        return paNoDevice;
     }
+
+    for (int i = 0; i < numDevices; i++)
+    {
+        const PaDeviceInfo *deviceInfo = Pa_GetDeviceInfo(i);
+        if (!deviceInfo)
+            continue;
+
+        if (is_input && deviceInfo->maxInputChannels < 1)
+            continue;
+        if (!is_input && deviceInfo->maxOutputChannels < 1)
+            continue;
+
+        if (strcasecmp(deviceInfo->name, device_name) == 0)
+        {
+            return i;
+        }
+    }
+    return paNoDevice;
 }
 
-static int get_device_index(const char *value, int is_input)
+void list_input_devices()
 {
-    if (!value)
-        return paNoDevice;
-    list_all_devices();
-
-    // Try numeric index
-    char *endptr;
-    int index = strtol(value, &endptr, 10);
-    if (*endptr == '\0')
+    int numDevices = Pa_GetDeviceCount();
+    if (numDevices < 0)
     {
-        const PaDeviceInfo *info = Pa_GetDeviceInfo(index);
-        if (info && ((is_input && info->maxInputChannels) || (!is_input && info->maxOutputChannels)))
-        {
-            printf("Using device ID: %d (%s)\n", index, info->name);
-            return index;
-        }
-        fprintf(stderr, "Device ID %d is not a valid %s device.\n", index, is_input ? "input" : "output");
-        return paNoDevice;
+        fprintf(stderr, "ERROR: Pa_CountDevices returned 0x%x\n", numDevices);
+        return;
     }
 
-    // Try name match
-    for (int i = 0, n = Pa_GetDeviceCount(); i < n; i++)
+    printf("Available input devices:\n");
+    for (int i = 0; i < numDevices; i++)
     {
-        const PaDeviceInfo *info = Pa_GetDeviceInfo(i);
-        if (info && strcasecmp(info->name, value) == 0)
+        const PaDeviceInfo *deviceInfo = Pa_GetDeviceInfo(i);
+        if (deviceInfo && deviceInfo->maxInputChannels > 0)
         {
-            if ((is_input && info->maxInputChannels) || (!is_input && info->maxOutputChannels))
-            {
-                printf("Matched device by name: [%d] %s\n", i, info->name);
-                return i;
-            }
+            printf("  %d: %s\n", i, deviceInfo->name);
         }
     }
-
-    fprintf(stderr, "No matching %s device found for \"%s\"\n", is_input ? "input" : "output", value);
-    return paNoDevice;
 }
 
 static int audioCallback(const void *inputBuffer, void *outputBuffer,
