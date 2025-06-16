@@ -66,7 +66,7 @@ static int get_device_index(const char *value, int is_input)
     for (int i = 0, n = Pa_GetDeviceCount(); i < n; i++)
     {
         const PaDeviceInfo *info = Pa_GetDeviceInfo(i);
-        if (info && strcasecmp(info->name, value))
+        if (info && strcasecmp(info->name, value) == 0)
         {
             if ((is_input && info->maxInputChannels) || (!is_input && info->maxOutputChannels))
             {
@@ -140,21 +140,21 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
             sound_confidence = 0;
         }
     }
-
     if (data->recording)
     {
         if (data->size + framesPerBuffer > data->capacity)
         {
             data->capacity *= 2;
-            data->buffer = realloc(data->buffer, data->capacity * sizeof(short));
-            if (!data->buffer)
+            short *new_buffer = realloc(data->buffer, data->capacity * sizeof(short));
+            if (!new_buffer)
             {
                 fprintf(stderr, "Memory reallocation failed!\n");
                 return paAbort;
             }
+            data->buffer = new_buffer;
         }
 
-        memcpy(data->buffer, input, framesPerBuffer * sizeof(short));
+        memcpy(data->buffer + data->size, input, framesPerBuffer * sizeof(short)); // append, not overwrite
         data->size += framesPerBuffer;
 
         if (max_amplitude > data->amplitude_threshold)
