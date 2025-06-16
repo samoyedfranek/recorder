@@ -32,16 +32,12 @@ typedef struct
 
 static void list_all_devices()
 {
-    int numDevices = Pa_GetDeviceCount();
     printf("Available PortAudio devices:\n");
-    for (int i = 0; i < numDevices; i++)
+    for (int i = 0, n = Pa_GetDeviceCount(); i < n; i++)
     {
         const PaDeviceInfo *info = Pa_GetDeviceInfo(i);
         if (info)
-        {
-            printf("  [%d] %s (Input: %d, Output: %d)\n",
-                   i, info->name, info->maxInputChannels, info->maxOutputChannels);
-        }
+            printf("  [%d] %s (Input: %d, Output: %d)\n", i, info->name, info->maxInputChannels, info->maxOutputChannels);
     }
 }
 
@@ -49,26 +45,15 @@ static int get_device_index(const char *value, int is_input)
 {
     if (!value)
         return paNoDevice;
-
-    // List devices for debug
     list_all_devices();
 
-    // Check if value is numeric
-    int is_number = 1;
-    for (int i = 0; value[i]; i++)
+    // Try numeric index
+    char *endptr;
+    int index = strtol(value, &endptr, 10);
+    if (*endptr == '\0')
     {
-        if (!isdigit(value[i]))
-        {
-            is_number = 0;
-            break;
-        }
-    }
-
-    if (is_number)
-    {
-        int index = atoi(value);
         const PaDeviceInfo *info = Pa_GetDeviceInfo(index);
-        if (info && ((is_input && info->maxInputChannels > 0) || (!is_input && info->maxOutputChannels > 0)))
+        if (info && ((is_input && info->maxInputChannels) || (!is_input && info->maxOutputChannels)))
         {
             printf("Using device ID: %d (%s)\n", index, info->name);
             return index;
@@ -77,14 +62,13 @@ static int get_device_index(const char *value, int is_input)
         return paNoDevice;
     }
 
-    // Try case-insensitive match by name substring
-    int numDevices = Pa_GetDeviceCount();
-    for (int i = 0; i < numDevices; i++)
+    // Try name match
+    for (int i = 0, n = Pa_GetDeviceCount(); i < n; i++)
     {
         const PaDeviceInfo *info = Pa_GetDeviceInfo(i);
         if (info && strcasestr_local(info->name, value))
         {
-            if ((is_input && info->maxInputChannels > 0) || (!is_input && info->maxOutputChannels > 0))
+            if ((is_input && info->maxInputChannels) || (!is_input && info->maxOutputChannels))
             {
                 printf("Matched device by name: [%d] %s\n", i, info->name);
                 return i;
@@ -92,7 +76,7 @@ static int get_device_index(const char *value, int is_input)
         }
     }
 
-    fprintf(stderr, "No matching %s device found for name: \"%s\"\n", is_input ? "input" : "output", value);
+    fprintf(stderr, "No matching %s device found for \"%s\"\n", is_input ? "input" : "output", value);
     return paNoDevice;
 }
 
@@ -105,9 +89,13 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
     AudioData *data = (AudioData *)userData;
     const short *input = (const short *)inputBuffer;
 
+    static int sound_confidence = 0;
+    const int confidence_threshold = 3; // require 3 consecutive loud chunks
+
     if (!input)
     {
-        fprintf(stderr, "No input detected!\n");
+        if (data->debug_amplitude)
+            fprintf(stderr, "Warning: input buffer is NULL!\n");
         return paContinue;
     }
 
@@ -126,19 +114,31 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
 
     time_t current_time = time(NULL);
 
-    if (max_amplitude > data->amplitude_threshold && !data->recording)
+    if (!data->recording)
     {
-        printf("Recording started.\n");
-        data->recording = 1;
-        data->size = 0;
-        data->capacity = SAMPLE_RATE * 10;
-        data->buffer = (short *)malloc(data->capacity * sizeof(short));
-        if (!data->buffer)
+        if (max_amplitude > data->amplitude_threshold)
         {
-            fprintf(stderr, "Memory allocation failed!\n");
-            return paAbort;
+            sound_confidence++;
+            if (sound_confidence >= confidence_threshold)
+            {
+                printf("Sound confirmed. Recording started.\n");
+                data->recording = 1;
+                data->size = 0;
+                data->capacity = SAMPLE_RATE * 10;
+                data->buffer = (short *)malloc(data->capacity * sizeof(short));
+                if (!data->buffer)
+                {
+                    fprintf(stderr, "Memory allocation failed!\n");
+                    return paAbort;
+                }
+                data->last_sound_time = current_time;
+                sound_confidence = 0;
+            }
         }
-        data->last_sound_time = current_time;
+        else
+        {
+            sound_confidence = 0;
+        }
     }
 
     if (data->recording)
@@ -153,6 +153,7 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
                 return paAbort;
             }
         }
+
         memcpy(data->buffer + data->size, input, framesPerBuffer * sizeof(short));
         data->size += framesPerBuffer;
 
