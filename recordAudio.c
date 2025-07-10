@@ -112,27 +112,23 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
         data->recording_total_chunks++;
 
         data->recording_check_counter++;
-
-        if (data->recording_check_counter >= RECORDING_CHECK_INTERVAL)
+        if (data->debug_amplitude && data->recording_check_counter >= RECORDING_CHECK_INTERVAL)
         {
-            if (data->debug_amplitude)
-            {
-                data->recording_check_counter = 0;
+            data->recording_check_counter = 0;
 
-                double recording_time_sec = (double)data->size / SAMPLE_RATE;
+            double recording_time_sec = (double)data->size / SAMPLE_RATE;
 
-                time_t raw_time = time(NULL);
-                struct tm *time_info = localtime(&raw_time);
-                char time_str[32];
-                strftime(time_str, sizeof(time_str), "%H:%M:%S", time_info);
+            time_t raw_time = time(NULL);
+            struct tm *time_info = localtime(&raw_time);
+            char time_str[32];
+            strftime(time_str, sizeof(time_str), "%H:%M:%S", time_info);
 
-                printf("[RECORDING] Time: %s | Max Amplitude: %d | Chunks: %d | Samples: %zu | Time: %.2fs\n",
-                       time_str,
-                       max_amplitude,
-                       data->recording_total_chunks,
-                       data->size,
-                       recording_time_sec);
-            }
+            printf("[RECORDING] Time: %s | Max Amplitude: %d | Chunks: %d | Samples: %zu | Time: %.2fs\n",
+                   time_str,
+                   max_amplitude,
+                   data->recording_total_chunks,
+                   data->size,
+                   recording_time_sec);
         }
 
         if (max_amplitude > data->amplitude_threshold)
@@ -200,7 +196,6 @@ void recorder(const char *com_port)
     }
 
     data.amplitude_threshold = AMPLITUDE_THRESHOLD;
-    data.debug_amplitude = DEBUG_AMPLITUDE;
     data.chunk_size = CHUNK_SIZE;
     data.recording_total_chunks = 0;
 
