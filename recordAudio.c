@@ -118,15 +118,10 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
 
             double recording_time_sec = (double)data->size / SAMPLE_RATE;
 
-            struct timeval tv;
-            gettimeofday(&tv, NULL);
-            time_t raw_time = tv.tv_sec;
-            int milliseconds = tv.tv_usec / 1000;
-
+            time_t raw_time = time(NULL);
             struct tm *time_info = localtime(&raw_time);
-            char time_str[40];
-            snprintf(time_str, sizeof(time_str), "%02d:%02d:%02d.%03d",
-                     time_info->tm_hour, time_info->tm_min, time_info->tm_sec, milliseconds);
+            char time_str[32];
+            strftime(time_str, sizeof(time_str), "%H:%M:%S", time_info);
 
             struct tm *last_tm = localtime(&data->last_sound_time);
             char last_sound_str[32];
@@ -146,56 +141,57 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
                        recording_time_sec);
             }
         }
-        if (max_amplitude > data->amplitude_threshold)
-        {
-            data->last_sound_time = current_time;
-        }
-
-        if (difftime(current_time, data->last_sound_time) > SILENCE_THRESHOLD)
-        {
-            printf("Silence detected. Stopping recording...\n");
-
-            size_t remove_samples = REMOVE_LAST_SECONDS * SAMPLE_RATE;
-            if (data->size > remove_samples)
-            {
-                data->size -= remove_samples;
-            }
-            else
-            {
-                data->size = 0;
-            }
-
-            if (data->size > 0)
-            {
-                char filename[256], final_file_path[256], time_str[64];
-                time_t now = time(NULL);
-                struct tm *t = localtime(&now);
-                strftime(time_str, sizeof(time_str), "%Y%m%d_%H%M%S", t);
-                snprintf(filename, sizeof(filename), "%s_%s.wav", data->serial_name, time_str);
-                snprintf(final_file_path, sizeof(final_file_path), RECORDINGS_DIR "/%s", filename);
-
-                if (write_wav_file(final_file_path, data->buffer, data->size, SAMPLE_RATE) == 0)
-                {
-                    printf("Recording saved: %s\n", final_file_path);
-                }
-                else
-                {
-                    fprintf(stderr, "Failed to write WAV file.\n");
-                }
-            }
-            else
-            {
-                printf("Recording too short, skipping save.\n");
-            }
-
-            free(data->buffer);
-            data->buffer = NULL;
-            data->size = 0;
-            data->capacity = 0;
-            data->recording = 0;
-        }
     }
-    return paContinue;
+    if (max_amplitude > data->amplitude_threshold)
+    {
+        data->last_sound_time = current_time;
+    }
+
+    if (difftime(current_time, data->last_sound_time) > SILENCE_THRESHOLD)
+    {
+        printf("Silence detected. Stopping recording...\n");
+
+        size_t remove_samples = REMOVE_LAST_SECONDS * SAMPLE_RATE;
+        if (data->size > remove_samples)
+        {
+            data->size -= remove_samples;
+        }
+        else
+        {
+            data->size = 0;
+        }
+
+        if (data->size > 0)
+        {
+            char filename[256], final_file_path[256], time_str[64];
+            time_t now = time(NULL);
+            struct tm *t = localtime(&now);
+            strftime(time_str, sizeof(time_str), "%Y%m%d_%H%M%S", t);
+            snprintf(filename, sizeof(filename), "%s_%s.wav", data->serial_name, time_str);
+            snprintf(final_file_path, sizeof(final_file_path), RECORDINGS_DIR "/%s", filename);
+
+            if (write_wav_file(final_file_path, data->buffer, data->size, SAMPLE_RATE) == 0)
+            {
+                printf("Recording saved: %s\n", final_file_path);
+            }
+            else
+            {
+                fprintf(stderr, "Failed to write WAV file.\n");
+            }
+        }
+        else
+        {
+            printf("Recording too short, skipping save.\n");
+        }
+
+        free(data->buffer);
+        data->buffer = NULL;
+        data->size = 0;
+        data->capacity = 0;
+        data->recording = 0;
+    }
+}
+return paContinue;
 }
 
 void recorder(const char *com_port)
