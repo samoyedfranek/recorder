@@ -123,18 +123,20 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
             strftime(time_str, sizeof(time_str), "%H:%M:%S", time_info);
             if(data->debug_amplitude)
             {
-                printf("[RECORDING] Time: %s | Max Amplitude: %d | Chunks: %d | Samples: %zu | Time: %.2fs\n",
+                printf("[RECORDING] Time: %s | Max Amplitude: %d | Chunks: %d | Samples: %zu | Time: %.2fs\n | Last sound: ",
                        time_str,
                        max_amplitude,
                        data->recording_total_chunks,
                        data->size,
-                       recording_time_sec);
+                       recording_time_sec,
+                       data->last_sound_time);
             }
         }
 
         if (max_amplitude > data->amplitude_threshold)
         {
             data->last_sound_time = current_time;
+            printf(current_time, data->last_sound_time)
         }
 
         if (difftime(current_time, data->last_sound_time) > SILENCE_THRESHOLD)
