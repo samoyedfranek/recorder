@@ -116,10 +116,10 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
         data->size += framesPerBuffer;
         data->recording_total_chunks++;
 
-        data->recording_chunk_counter++;
-        if (data->recording_chunk_counter >= RECORDING_CHECK_INTERVAL)
+        data->recording_check_counter++;
+        if (data->recording_check_counter >= RECORDING_CHECK_INTERVAL)
         {
-            data->recording_chunk_counter = 0;
+            data->recording_check_counter = 0;
 
             double recording_time_sec = (double)data->size / SAMPLE_RATE;
 
