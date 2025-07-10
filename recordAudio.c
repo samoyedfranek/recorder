@@ -117,26 +117,34 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
 
             double recording_time_sec = (double)data->size / SAMPLE_RATE;
 
-            time_t raw_time = time(NULL);
+            struct timeval tv;
+            gettimeofday(&tv, NULL);
+            time_t raw_time = tv.tv_sec;
+            int milliseconds = tv.tv_usec / 1000;
+
             struct tm *time_info = localtime(&raw_time);
-            char time_str[32];
-            strftime(time_str, sizeof(time_str), "%H:%M:%S", time_info);
-            char last_sound_str[32];
+            char time_str[40];
+            snprintf(time_str, sizeof(time_str), "%02d:%02d:%02d.%03d",
+                     time_info->tm_hour, time_info->tm_min, time_info->tm_sec, milliseconds);
+
             struct tm *last_tm = localtime(&data->last_sound_time);
+            char last_sound_str[32];
             strftime(last_sound_str, sizeof(last_sound_str), "%H:%M:%S", last_tm);
+
+            double silence_duration = difftime(raw_time, data->last_sound_time);
 
             if (data->debug_amplitude)
             {
-                printf("[RECORDING] Time: %s | Max Amplitude: %d | Chunks: %d | Samples: %zu | Time: %.2fs | Last sound: %s\n",
+                printf("[RECORDING] Time: %s | Last sound: %s | Silence: %.2fs | Max Amplitude: %d | Chunks: %d | Samples: %zu | Recording time: %.2fs\n",
                        time_str,
+                       last_sound_str,
+                       silence_duration,
                        max_amplitude,
                        data->recording_total_chunks,
                        data->size,
-                       recording_time_sec,
-                       last_sound_str);
+                       recording_time_sec);
             }
         }
-
         if (max_amplitude > data->amplitude_threshold)
         {
             data->last_sound_time = current_time;
