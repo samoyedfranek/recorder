@@ -65,12 +65,6 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
         if (sample > max_amplitude)
             max_amplitude = sample;
     }
-
-    // if (data->debug_amplitude)
-    // {
-    //     printf("Max amplitude: %d\n", max_amplitude);
-    // }
-
     time_t current_time = time(NULL);
 
     if (max_amplitude > data->amplitude_threshold && !data->recording)
@@ -127,13 +121,15 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
             struct tm *time_info = localtime(&raw_time);
             char time_str[32];
             strftime(time_str, sizeof(time_str), "%H:%M:%S", time_info);
-
-            printf("[RECORDING] Time: %s | Max Amplitude: %d | Chunks: %d | Samples: %zu | Time: %.2fs\n",
-                   time_str,
-                   max_amplitude,
-                   data->recording_total_chunks,
-                   data->size,
-                   recording_time_sec);
+            if(data->debug_amplitude)
+            {
+                printf("[RECORDING] Time: %s | Max Amplitude: %d | Chunks: %d | Samples: %zu | Time: %.2fs\n",
+                       time_str,
+                       max_amplitude,
+                       data->recording_total_chunks,
+                       data->size,
+                       recording_time_sec);
+            }
         }
 
         if (max_amplitude > data->amplitude_threshold)
