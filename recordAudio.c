@@ -66,6 +66,11 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
             max_amplitude = sample;
     }
 
+    if (data->debug_amplitude)
+    {
+        printf("Max amplitude: %d\n", max_amplitude);
+    }
+
     time_t current_time = time(NULL);
 
     if (max_amplitude > data->amplitude_threshold && !data->recording)
@@ -196,6 +201,7 @@ void recorder(const char *com_port)
     }
 
     data.amplitude_threshold = AMPLITUDE_THRESHOLD;
+    data.debug_amplitude = DEBUG_AMPLITUDE;
     data.chunk_size = CHUNK_SIZE;
     data.recording_total_chunks = 0;
 
@@ -259,6 +265,14 @@ void recorder(const char *com_port)
     }
 
     printf("Started recording on serial: %s\n", data.serial_name);
+    if (data.debug_amplitude)
+        printf("Amplitude debugging enabled. Threshold: %d\n", data.amplitude_threshold);
+
+    while (1)
+    {
+        sleep(1);
+    }
+
     Pa_StopStream(stream);
     Pa_CloseStream(stream);
     Pa_Terminate();
