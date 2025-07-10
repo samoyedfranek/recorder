@@ -112,7 +112,7 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
         data->recording_total_chunks++;
 
         data->recording_check_counter++;
-        if (data->debug_amplitude && data->recording_check_counter >= RECORDING_CHECK_INTERVAL)
+        if (data->recording_check_counter >= RECORDING_CHECK_INTERVAL)
         {
             data->recording_check_counter = 0;
 
