@@ -66,10 +66,10 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
             max_amplitude = sample;
     }
 
-    if (data->debug_amplitude)
-    {
-        printf("Max amplitude: %d\n", max_amplitude);
-    }
+    // if (data->debug_amplitude)
+    // {
+    //     printf("Max amplitude: %d\n", max_amplitude);
+    // }
 
     time_t current_time = time(NULL);
 
@@ -265,9 +265,6 @@ void recorder(const char *com_port)
     }
 
     printf("Started recording on serial: %s\n", data.serial_name);
-    if (data.debug_amplitude)
-        printf("Amplitude debugging enabled. Threshold: %d\n", data.amplitude_threshold);
-
     while (1)
     {
         sleep(1);
