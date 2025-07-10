@@ -3,6 +3,7 @@
 #include <string.h>
 #include <math.h>
 #include <time.h>
+#include <sys/time.h>
 #include <unistd.h>
 #include <portaudio.h>
 #include "h/write_wav_file.h"
