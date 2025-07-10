@@ -19,7 +19,6 @@ char RECORDER_CMD[256] = "";
 char REPO_BRANCH[64] = "";
 int AMPLITUDE_THRESHOLD = 0;
 int CHUNK_SIZE = 0;
-bool DEBUG_AMPLITUDE = false;
 bool LIVE_LISTEN = false;
 char EXTRA_TEXT[64] = "";
 int SILENCE_THRESHOLD = 0;
@@ -207,10 +206,6 @@ int load_env(const char *filename)
         else if (strcmp(key, "CHUNK_SIZE") == 0)
         {
             CHUNK_SIZE = parse_int(value);
-        }
-        else if (strcmp(key, "DEBUG_AMPLITUDE") == 0)
-        {
-            DEBUG_AMPLITUDE = parse_bool(value);
         }
         else if (strcmp(key, "LIVE_LISTEN") == 0)
         {

@@ -17,7 +17,6 @@ extern char RECORDER_CMD[256];
 extern char REPO_BRANCH[64];
 extern int AMPLITUDE_THRESHOLD;
 extern int CHUNK_SIZE;
-extern bool DEBUG_AMPLITUDE;
 extern bool LIVE_LISTEN;
 extern char EXTRA_TEXT[64];
 extern int SILENCE_THRESHOLD;

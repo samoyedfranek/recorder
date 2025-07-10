@@ -29,7 +29,6 @@ typedef struct
     time_t last_sound_time;
     char serial_name[256];
     int amplitude_threshold;
-    int debug_amplitude;
     int chunk_size;
     short prebuffer[PREBUFFER_SIZE];
     size_t prebuffer_index;
@@ -128,9 +127,6 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
             strftime(last_sound_str, sizeof(last_sound_str), "%H:%M:%S", last_tm);
 
             double silence_duration = difftime(raw_time, data->last_sound_time);
-
-            if (data->debug_amplitude)
-            {
                 printf("[RECORDING] Time: %s | Last sound: %s | Silence: %.2fs | Max Amplitude: %d | Chunks: %d | Samples: %zu | Recording time: %.2fs\n",
                        time_str,
                        last_sound_str,
@@ -139,7 +135,6 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
                        data->recording_total_chunks,
                        data->size,
                        recording_time_sec);
-            }
         }
 
         if (max_amplitude > data->amplitude_threshold)
@@ -207,7 +202,6 @@ void recorder(const char *com_port)
     }
 
     data.amplitude_threshold = AMPLITUDE_THRESHOLD;
-    data.debug_amplitude = DEBUG_AMPLITUDE;
     data.chunk_size = CHUNK_SIZE;
     data.recording_total_chunks = 0;
 
