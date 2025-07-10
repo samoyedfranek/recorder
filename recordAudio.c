@@ -185,9 +185,7 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
             data->recording = 0;
         }
     }
-}
-
-return paContinue;
+    return paContinue;
 }
 
 void recorder(const char *com_port)
