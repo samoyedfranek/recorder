@@ -13,6 +13,9 @@
 #define SAMPLE_RATE 48000
 #define CHANNELS 1
 #define RECORDINGS_DIR "./recordings"
+#define PREBUFFER_SECONDS 1
+#define PREBUFFER_SIZE (SAMPLE_RATE * PREBUFFER_SECONDS)
+#define RECORDING_CHECK_INTERVAL 20
 
 typedef struct
 {
@@ -20,11 +23,16 @@ typedef struct
     size_t size;
     size_t capacity;
     int recording;
+    int recording_check_counter;
+    int recording_total_chunks;
     time_t last_sound_time;
     char serial_name[256];
     int amplitude_threshold;
     int debug_amplitude;
     int chunk_size;
+    short prebuffer[PREBUFFER_SIZE];
+    size_t prebuffer_index;
+    int prebuffer_full;
 } AudioData;
 
 static int audioCallback(const void *inputBuffer, void *outputBuffer,
@@ -41,6 +49,14 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
         fprintf(stderr, "No input detected!\n");
         return paContinue;
     }
+
+    for (unsigned int i = 0; i < framesPerBuffer; i++)
+    {
+        data->prebuffer[data->prebuffer_index] = input[i];
+        data->prebuffer_index = (data->prebuffer_index + 1) % PREBUFFER_SIZE;
+    }
+    if (data->prebuffer_index == 0)
+        data->prebuffer_full = 1;
 
     int max_amplitude = 0;
     for (unsigned int i = 0; i < framesPerBuffer; i++)
@@ -61,6 +77,7 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
     {
         printf("Recording started.\n");
         data->recording = 1;
+        data->recording_check_counter = 0;
         data->size = 0;
         data->capacity = SAMPLE_RATE * 10;
         data->buffer = (short *)malloc(data->capacity * sizeof(short));
@@ -69,6 +86,16 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
             fprintf(stderr, "Memory allocation failed!\n");
             return paAbort;
         }
+
+        size_t pre_start = data->prebuffer_full ? data->prebuffer_index : 0;
+        size_t pre_count = data->prebuffer_full ? PREBUFFER_SIZE : data->prebuffer_index;
+
+        for (size_t i = 0; i < pre_count; i++)
+        {
+            size_t idx = (pre_start + i) % PREBUFFER_SIZE;
+            data->buffer[data->size++] = data->prebuffer[idx];
+        }
+
         data->last_sound_time = current_time;
     }
 
@@ -84,8 +111,30 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
                 return paAbort;
             }
         }
+
         memcpy(data->buffer + data->size, input, framesPerBuffer * sizeof(short));
         data->size += framesPerBuffer;
+        data->recording_total_chunks++;
+
+        data->recording_chunk_counter++;
+        if (data->recording_chunk_counter >= RECORDING_CHECK_INTERVAL)
+        {
+            data->recording_chunk_counter = 0;
+
+            double recording_time_sec = (double)data->size / SAMPLE_RATE;
+
+            time_t raw_time = time(NULL);
+            struct tm *time_info = localtime(&raw_time);
+            char time_str[32];
+            strftime(time_str, sizeof(time_str), "%H:%M:%S", time_info);
+
+            printf("[RECORDING] Time: %s | Max Amplitude: %d | Chunks: %d | Samples: %zu | Time: %.2fs\n",
+                   time_str,
+                   max_amplitude,
+                   data->recording_total_chunks,
+                   data->size,
+                   recording_time_sec);
+        }
 
         if (max_amplitude > data->amplitude_threshold)
         {
@@ -94,7 +143,7 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
 
         if (difftime(current_time, data->last_sound_time) > SILENCE_THRESHOLD)
         {
-            printf("Silence detected for too long. Stopping recording...\n");
+            printf("Silence detected. Stopping recording...\n");
 
             size_t remove_samples = REMOVE_LAST_SECONDS * SAMPLE_RATE;
             if (data->size > remove_samples)
@@ -108,8 +157,7 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
 
             if (data->size > 0)
             {
-                char filename[256], final_file_path[256];
-                char time_str[64];
+                char filename[256], final_file_path[256], time_str[64];
                 time_t now = time(NULL);
                 struct tm *t = localtime(&now);
                 strftime(time_str, sizeof(time_str), "%Y%m%d_%H%M%S", t);
@@ -137,8 +185,9 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
             data->recording = 0;
         }
     }
+}
 
-    return paContinue;
+return paContinue;
 }
 
 void recorder(const char *com_port)
@@ -156,6 +205,7 @@ void recorder(const char *com_port)
     data.amplitude_threshold = AMPLITUDE_THRESHOLD;
     data.debug_amplitude = DEBUG_AMPLITUDE;
     data.chunk_size = CHUNK_SIZE;
+    data.recording_total_chunks = 0;
 
     char *serial_name = open_serial_port(com_port);
     snprintf(data.serial_name, sizeof(data.serial_name), "%s", serial_name ? serial_name : "unknown");
@@ -176,9 +226,9 @@ void recorder(const char *com_port)
     else
     {
         const PaDeviceInfo *info = Pa_GetDeviceInfo(AUDIO_INPUT_DEVICE);
-        if (info == NULL || info->maxInputChannels < CHANNELS)
+        if (!info || info->maxInputChannels < CHANNELS)
         {
-            fprintf(stderr, "Specified AUDIO_INPUT_DEVICE (%d) not suitable (null or too few input channels). Falling back to default.\n", AUDIO_INPUT_DEVICE);
+            fprintf(stderr, "Invalid device %d. Using default.\n", AUDIO_INPUT_DEVICE);
             inputParams.device = Pa_GetDefaultInputDevice();
         }
         else
@@ -193,22 +243,16 @@ void recorder(const char *com_port)
         Pa_Terminate();
         return;
     }
+
     inputParams.channelCount = CHANNELS;
     inputParams.sampleFormat = paInt16;
     inputParams.suggestedLatency = Pa_GetDeviceInfo(inputParams.device)->defaultLowInputLatency;
     inputParams.hostApiSpecificStreamInfo = NULL;
 
-    err = Pa_OpenStream(&stream,
-                        &inputParams,
-                        NULL,
-                        SAMPLE_RATE,
-                        data.chunk_size,
-                        paClipOff,
-                        audioCallback,
-                        &data);
+    err = Pa_OpenStream(&stream, &inputParams, NULL, SAMPLE_RATE, data.chunk_size, paClipOff, audioCallback, &data);
     if (err != paNoError)
     {
-        fprintf(stderr, "PortAudio stream error: %s\n", Pa_GetErrorText(err));
+        fprintf(stderr, "Stream error: %s\n", Pa_GetErrorText(err));
         Pa_Terminate();
         return;
     }
@@ -216,7 +260,7 @@ void recorder(const char *com_port)
     err = Pa_StartStream(stream);
     if (err != paNoError)
     {
-        fprintf(stderr, "PortAudio start error: %s\n", Pa_GetErrorText(err));
+        fprintf(stderr, "Start error: %s\n", Pa_GetErrorText(err));
         Pa_CloseStream(stream);
         Pa_Terminate();
         return;
