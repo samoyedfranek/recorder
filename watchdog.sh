@@ -20,6 +20,26 @@ else
     exit 1
 fi
 
+# Find the first /dev/ttyACM* device
+COM_DEVICE=$(ls /dev/ttyACM* 2>/dev/null | head -n 1)
+
+if [ -n "$COM_DEVICE" ]; then
+    echo "Found COM device: $COM_DEVICE"
+    # Replace or add COM_PORT= with the device path
+    if grep -q '^COM_PORT=' "$ENV_FILE"; then
+        sed -i "s|^COM_PORT=.*|COM_PORT=$COM_DEVICE|" "$ENV_FILE"
+    else
+        echo "COM_PORT=$COM_DEVICE" >> "$ENV_FILE"
+    fi
+else
+    echo "No /dev/ttyACM* device found, setting COM_PORT empty"
+    if grep -q '^COM_PORT=' "$ENV_FILE"; then
+        sed -i "s|^COM_PORT=.*|COM_PORT=|" "$ENV_FILE"
+    else
+        echo "COM_PORT=" >> "$ENV_FILE"
+    fi
+fi
+
 # === Load config from .env ===
 if [ -f "$ENV_FILE" ]; then
     export $(grep -v '^#' "$ENV_FILE" | xargs)
