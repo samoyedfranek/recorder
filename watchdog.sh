@@ -20,19 +20,21 @@ else
     exit 1
 fi
 
-# Find the first /dev/ttyACM* device
+# === Detect and handle COM port ===
 COM_DEVICE=$(ls /dev/ttyACM* 2>/dev/null | head -n 1)
 
-if [ -n "$COM_DEVICE" ]; then
+# Check if COM_PORT=false is explicitly set in .env
+EXPLICIT_DISABLE=$(grep '^COM_PORT=false' "$ENV_FILE" 2>/dev/null)
+
+if [ -n "$COM_DEVICE" ] && [ -z "$EXPLICIT_DISABLE" ]; then
     echo "Found COM device: $COM_DEVICE"
-    # Replace or add COM_PORT= with the device path
     if grep -q '^COM_PORT=' "$ENV_FILE"; then
         sed -i "s|^COM_PORT=.*|COM_PORT=$COM_DEVICE|" "$ENV_FILE"
     else
         echo "COM_PORT=$COM_DEVICE" >> "$ENV_FILE"
     fi
 else
-    echo "No /dev/ttyACM* device found, setting COM_PORT empty"
+    echo "No COM device found or COM_PORT=false set in .env, setting COM_PORT empty"
     if grep -q '^COM_PORT=' "$ENV_FILE"; then
         sed -i "s|^COM_PORT=.*|COM_PORT=|" "$ENV_FILE"
     else
