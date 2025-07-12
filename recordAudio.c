@@ -81,13 +81,27 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
             return paAbort;
         }
 
-        size_t pre_start = data->prebuffer_full ? data->prebuffer_index : 0;
         size_t pre_count = data->prebuffer_full ? PREBUFFER_SIZE : data->prebuffer_index;
+        size_t start_index = data->prebuffer_index; // Most recent sample
 
+        int start_offset = -1;
         for (size_t i = 0; i < pre_count; i++)
         {
-            size_t idx = (pre_start + i) % PREBUFFER_SIZE;
-            data->buffer[data->size++] = data->prebuffer[idx];
+            size_t idx = (start_index + i) % PREBUFFER_SIZE;
+            if (abs(data->prebuffer[idx]) > data->amplitude_threshold / 2)
+            {
+                start_offset = i;
+                break;
+            }
+        }
+
+        if (start_offset != -1)
+        {
+            for (size_t i = start_offset; i < pre_count; i++)
+            {
+                size_t idx = (start_index + i) % PREBUFFER_SIZE;
+                data->buffer[data->size++] = data->prebuffer[idx];
+            }
         }
 
         data->last_sound_time = current_time;
@@ -127,14 +141,14 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
             strftime(last_sound_str, sizeof(last_sound_str), "%H:%M:%S", last_tm);
 
             double silence_duration = difftime(raw_time, data->last_sound_time);
-                printf("[RECORDING] Time: %s | Last sound: %s | Silence: %.2fs | Max Amplitude: %d | Chunks: %d | Samples: %zu | Recording time: %.2fs\n",
-                       time_str,
-                       last_sound_str,
-                       silence_duration,
-                       max_amplitude,
-                       data->recording_total_chunks,
-                       data->size,
-                       recording_time_sec);
+            printf("[RECORDING] Time: %s | Last sound: %s | Silence: %.2fs | Max Amplitude: %d | Chunks: %d | Samples: %zu | Recording time: %.2fs\n",
+                   time_str,
+                   last_sound_str,
+                   silence_duration,
+                   max_amplitude,
+                   data->recording_total_chunks,
+                   data->size,
+                   recording_time_sec);
         }
 
         if (max_amplitude > data->amplitude_threshold)
