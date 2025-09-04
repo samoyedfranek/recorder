@@ -209,6 +209,12 @@ void recorder(const char *com_port)
     PaStream *stream;
     AudioData data = {0};
 
+    int watchdog_fd = open("/dev/watchdog", O_WRONLY);
+    if (watchdog_fd < 0)
+    {
+        perror("watchdog");
+    }
+
     if (load_env(".env") != 0)
     {
         printf("Failed to load config\n");
@@ -281,10 +287,19 @@ void recorder(const char *com_port)
     printf("Started recording on serial: %s\n", data.serial_name);
     while (1)
     {
+        if (watchdog_fd >= 0)
+        {
+            write(watchdog_fd, "\0", 1); // feed watchdog every second
+        }
         sleep(1);
     }
 
     Pa_StopStream(stream);
     Pa_CloseStream(stream);
     Pa_Terminate();
+
+    if (watchdog_fd >= 0)
+    {
+        close(watchdog_fd);
+    }
 }
