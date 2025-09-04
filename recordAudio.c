@@ -1,3 +1,5 @@
+#include <fcntl.h>   // for open(), O_WRONLY
+#include <sys/ioctl.h> // optional, for watchdog ioctl control
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
