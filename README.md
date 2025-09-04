@@ -1,9 +1,13 @@
+
+---
+
 ## 🚀 Installation
 
 1. Make the installer executable:
 
    ```bash
    chmod +x install.sh
+   ```
 
 2. Run the installer:
 
@@ -64,3 +68,74 @@ Build and runtime logs are saved to:
 ```
 watchdog.log
 ```
+
+---
+
+## 🔒 System Recovery and Auto-Reboot
+
+To make the Raspberry Pi automatically reboot on system failure, kernel panic, or if the recorder hangs:
+
+### 1. Reboot on systemd crash
+
+Edit `/etc/systemd/system.conf` **and** `/etc/systemd/user.conf` and add:
+
+```ini
+[Manager]
+# Reboot instead of halt on failure
+CrashReboot=yes
+```
+
+Then reload systemd:
+
+```bash
+sudo systemctl daemon-reexec
+```
+
+### 2. Reboot on kernel panic
+
+Edit `/etc/sysctl.conf` (or create `/etc/sysctl.d/99-panic.conf`) and add:
+
+```ini
+kernel.panic = 5
+```
+
+This ensures the Pi reboots 5 seconds after a kernel panic. Apply immediately without reboot:
+
+```bash
+sudo sysctl -w kernel.panic=5
+```
+
+### 3. Watchdog (hardware failsafe)
+
+If the system freezes completely, the hardware watchdog ensures a reboot:
+
+* Install watchdog:
+
+  ```bash
+  sudo apt install watchdog
+  ```
+* Enable Raspberry Pi watchdog module:
+
+  ```bash
+  sudo modprobe bcm2835_wdt
+  echo bcm2835_wdt | sudo tee -a /etc/modules
+  ```
+* Configure `/etc/watchdog.conf`:
+
+  ```ini
+  watchdog-device = /dev/watchdog
+  watchdog-timeout = 10
+  ```
+* Enable and start the watchdog service:
+
+  ```bash
+  sudo systemctl enable watchdog
+  sudo systemctl start watchdog
+  ```
+
+### 4. Recorder integration
+
+The recorder program automatically feeds the watchdog every second.
+If it freezes or crashes, the Pi will reboot after the configured timeout.
+
+---
