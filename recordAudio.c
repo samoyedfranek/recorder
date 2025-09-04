@@ -133,16 +133,16 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
 
             time_t raw_time = time(NULL);
             struct tm *time_info = localtime(&raw_time);
-            char time_str[32];
-            strftime(time_str, sizeof(time_str), "%H:%M:%S", time_info);
+            char datetime_str[64];
+            strftime(datetime_str, sizeof(datetime_str), "%Y-%m-%d %H:%M:%S", time_info);
 
             struct tm *last_tm = localtime(&data->last_sound_time);
             char last_sound_str[32];
             strftime(last_sound_str, sizeof(last_sound_str), "%H:%M:%S", last_tm);
 
             double silence_duration = difftime(raw_time, data->last_sound_time);
-            printf("[RECORDING] Time: %s | Last sound: %s | Silence: %.2fs | Max Amplitude: %d | Chunks: %d | Samples: %zu | Recording time: %.2fs\n",
-                   time_str,
+            printf("[RECORDING] DateTime: %s | Last sound: %s | Silence: %.2fs | Max Amplitude: %d | Chunks: %d | Samples: %zu | Recording time: %.2fs\n",
+                   datetime_str,
                    last_sound_str,
                    silence_duration,
                    max_amplitude,
