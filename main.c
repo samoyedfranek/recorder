@@ -206,16 +206,14 @@ void *recorder_thread(void *arg)
 {
     printf("Starting recording on device with COM port %s\n", COM_PORT);
     send_telegram_status(BOT_TOKEN, CHAT_IDS, "Rozpoczynanie nagrywania");
+    fflush(stdout);
     recorder(COM_PORT);
     return NULL;
 }
 
 int main(void)
 {
-    setvbuf(stdout, NULL, _IOLBF, 0);
     snd_lib_error_set_handler(silent_alsa_error);
-    setvbuf(stdout, NULL, _IOLBF, 0);
-    setvbuf(stderr, NULL, _IOLBF, 0);
 
     if (load_env(".env") != 0)
     {
