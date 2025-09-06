@@ -68,8 +68,8 @@ WorkingDirectory=$WORKDIR
 ExecStart=$WATCHDOG
 Restart=always
 Type=simple
-StandardOutput=append:$WORKDIR/watchdog.log
-StandardError=append:$WORKDIR/watchdog.log
+StandardOutput=journal
+StandardError=journal
 SyslogIdentifier=recorder-watchdog
 
 [Install]
