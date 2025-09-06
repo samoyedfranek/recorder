@@ -1,11 +1,11 @@
-#include <fcntl.h>   // for open(), O_WRONLY
-#include <sys/ioctl.h> // optional, for watchdog ioctl control
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
 #include <time.h>
 #include <sys/time.h>
+#include <fcntl.h>
+#include <sys/ioctl.h>
 #include <unistd.h>
 #include <portaudio.h>
 #include "h/write_wav_file.h"
@@ -230,6 +230,8 @@ void recorder(const char *com_port)
     char *serial_name = open_serial_port(com_port);
     snprintf(data.serial_name, sizeof(data.serial_name), "%s", serial_name ? serial_name : "unknown");
 
+    printf("Started recording on serial: %s\n", data.serial_name);
+
     err = Pa_Initialize();
     if (err != paNoError)
     {
@@ -286,12 +288,11 @@ void recorder(const char *com_port)
         return;
     }
 
-    printf("Started recording on serial: %s\n", data.serial_name);
     while (1)
     {
         if (watchdog_fd >= 0)
         {
-            write(watchdog_fd, "\0", 1); // feed watchdog every second
+            write(watchdog_fd, "\0", 1);
         }
         sleep(1);
     }
