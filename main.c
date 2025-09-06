@@ -214,6 +214,8 @@ void *recorder_thread(void *arg)
 int main(void)
 {
     snd_lib_error_set_handler(silent_alsa_error);
+    setvbuf(stdout, NULL, _IOLBF, 0);
+    setvbuf(stderr, NULL, _IOLBF, 0);
 
     if (load_env(".env") != 0)
     {
