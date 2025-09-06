@@ -5,11 +5,10 @@ AUDIO_DEVICE_NAME="All-In-One-Cable"
 ENV_FILE="$(dirname "$0")/.env"
 
 if arecord -l | grep "$AUDIO_DEVICE_NAME"; then
-    CARD_ID=$(arecord -l | grep "All-In-One-Cable" | sed -n 's/^card \([0-9]*\):.*/\1/p')
+    CARD_ID=$(arecord -l | grep "$AUDIO_DEVICE_NAME" | sed -n 's/^card \([0-9]*\):.*/\1/p')
 
     if [ -n "$CARD_ID" ]; then
         echo "Detected card ID: $CARD_ID for device '$AUDIO_DEVICE_NAME'"
-        # Update .env AUDIO_INPUT_DEVICE
         sed -i "s/^AUDIO_INPUT_DEVICE=.*/AUDIO_INPUT_DEVICE=$CARD_ID/" "$ENV_FILE"
     else
         echo "Could not extract card ID"
@@ -22,13 +21,9 @@ fi
 
 # === Detect and handle COM port ===
 COM_DEVICE=$(ls /dev/ttyACM* 2>/dev/null | head -n 1)
-
-# Check current value of COM_PORT in .env
 CURRENT_COM_PORT=$(grep '^COM_PORT=' "$ENV_FILE" 2>/dev/null | cut -d'=' -f2)
 
-if [ "$CURRENT_COM_PORT" = "false" ]; then
-    echo "COM_PORT is explicitly set to false in .env. Skipping COM port detection."
-else
+if [ "$CURRENT_COM_PORT" != "false" ]; then
     if [ -n "$COM_DEVICE" ]; then
         echo "Found COM device: $COM_DEVICE"
         if grep -q '^COM_PORT=' "$ENV_FILE"; then
@@ -56,16 +51,14 @@ fi
 
 cd "$WORKDIR" || { echo "Failed to cd to $WORKDIR"; exit 1; }
 
-LOGFILE="$WORKDIR/watchdog.log"
-
 # === Compile the recorder program ===
-echo "[$(date)] Compiling recorder..." | tee -a "$LOGFILE"
+echo "Compiling recorder..."
 if ! gcc -o recorder main.c open_serial_port.c recordAudio.c telegramSend.c config.c write_wav_file.c \
-    -lportaudio -lm -lserialport -lpthread -lcurl -luv -lasound -ljack 2>&1 | tee -a "$LOGFILE"; then
-    echo "[$(date)] Compilation failed. See $LOGFILE for details." | tee -a "$LOGFILE"
+    -lportaudio -lm -lserialport -lpthread -lcurl -luv -lasound -ljack; then
+    echo "Compilation failed."
     exit 1
 fi
-echo "[$(date)] Compilation succeeded." | tee -a "$LOGFILE"
+echo "Compilation succeeded."
 
 # === Function to get Git commit hashes ===
 get_hashes() {
@@ -77,7 +70,7 @@ get_hashes() {
 # === Start recorder ===
 $RECORDER_CMD 2>/dev/null &
 RECORDER_PID=$!
-echo "[$(date)] Recorder started with PID $RECORDER_PID"
+echo "Recorder started with PID $RECORDER_PID"
 
 # === Main loop ===
 while true; do
@@ -85,28 +78,24 @@ while true; do
     get_hashes
 
     if [ "$LOCAL_HASH" != "$REMOTE_HASH" ]; then
-        echo "[$(date)] New commit detected on $REPO_BRANCH. Pulling and restarting..."
-
+        echo "New commit detected on $REPO_BRANCH. Pulling and restarting..."
         git pull >/dev/null 2>&1
 
-        # Stop the recorder if still running
         if kill -0 $RECORDER_PID 2>/dev/null; then
             kill $RECORDER_PID
             wait $RECORDER_PID 2>/dev/null
         fi
 
-        # Re-compile after pulling new code
-        echo "[$(date)] Recompiling recorder after git pull..." | tee -a "$LOGFILE"
+        echo "Recompiling recorder after git pull..."
         if ! gcc -o recorder main.c open_serial_port.c recordAudio.c telegramSend.c config.c write_wav_file.c \
-            -lportaudio -lm -lserialport -lpthread -lcurl -luv -lasound -ljack 2>&1 | tee -a "$LOGFILE"; then
-            echo "[$(date)] Compilation failed after pull. See $LOGFILE for details." | tee -a "$LOGFILE"
+            -lportaudio -lm -lserialport -lpthread -lcurl -luv -lasound -ljack; then
+            echo "Compilation failed after pull."
             exit 1
         fi
-        echo "[$(date)] Compilation succeeded after pull." | tee -a "$LOGFILE"
+        echo "Compilation succeeded after pull."
 
-        # Restart
         $RECORDER_CMD 2>/dev/null &
         RECORDER_PID=$!
-        echo "[$(date)] Recorder restarted with PID $RECORDER_PID"
+        echo "Recorder restarted with PID $RECORDER_PID"
     fi
 done
