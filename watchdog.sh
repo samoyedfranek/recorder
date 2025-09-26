@@ -1,24 +1,38 @@
 #!/bin/bash
 
-# === Locate and update AUDIO_INPUT_DEVICE based on arecord ===
-AUDIO_DEVICE_NAME="All-In-One-Cable"
-ENV_FILE="$(dirname "$0")/.env"
-
-if arecord -l | grep "$AUDIO_DEVICE_NAME"; then
-    CARD_ID=$(arecord -l | grep "$AUDIO_DEVICE_NAME" | sed -n 's/^card \([0-9]*\):.*/\1/p')
-
-    if [ -n "$CARD_ID" ]; then
-        echo "Detected card ID: $CARD_ID for device '$AUDIO_DEVICE_NAME'"
-        sed -i "s/^AUDIO_INPUT_DEVICE=.*/AUDIO_INPUT_DEVICE=$CARD_ID/" "$ENV_FILE"
-    else
-        echo "Could not extract card ID"
-        exit 1
-    fi
+# === Load config from .env early ===
+if [ -f "$ENV_FILE" ]; then
+    export $(grep -v '^#' "$ENV_FILE" | xargs)
 else
-    echo "Audio device '$AUDIO_DEVICE_NAME' not found in arecord -l output."
+    echo "Missing .env file: $ENV_FILE"
     exit 1
 fi
 
+# === Locate and update AUDIO_INPUT_DEVICE based on arecord if AUTODETECT != true ===
+if [ "$AUTODETECT" != "true" ]; then
+    AUDIO_DEVICE_NAME="All-In-One-Cable"
+
+    if arecord -l | grep -q "$AUDIO_DEVICE_NAME"; then
+        CARD_ID=$(arecord -l | grep "$AUDIO_DEVICE_NAME" | sed -n 's/^card \([0-9]*\):.*/\1/p')
+
+        if [ -n "$CARD_ID" ]; then
+            echo "Detected card ID: $CARD_ID for device '$AUDIO_DEVICE_NAME'"
+            if grep -q '^AUDIO_INPUT_DEVICE=' "$ENV_FILE"; then
+                sed -i "s/^AUDIO_INPUT_DEVICE=.*/AUDIO_INPUT_DEVICE=$CARD_ID/" "$ENV_FILE"
+            else
+                echo "AUDIO_INPUT_DEVICE=$CARD_ID" >> "$ENV_FILE"
+            fi
+        else
+            echo "Could not extract card ID"
+            exit 1
+        fi
+    else
+        echo "Audio device '$AUDIO_DEVICE_NAME' not found in arecord -l output."
+        exit 1
+    fi
+else
+    echo "AUTODETECT=true, skipping arecord detection."
+fi
 # === Detect and handle COM port ===
 COM_DEVICE=$(ls /dev/ttyACM* 2>/dev/null | head -n 1)
 CURRENT_COM_PORT=$(grep '^COM_PORT=' "$ENV_FILE" 2>/dev/null | cut -d'=' -f2)
@@ -39,14 +53,6 @@ if [ "$CURRENT_COM_PORT" != "false" ]; then
             echo "COM_PORT=" >> "$ENV_FILE"
         fi
     fi
-fi
-
-# === Load config from .env ===
-if [ -f "$ENV_FILE" ]; then
-    export $(grep -v '^#' "$ENV_FILE" | xargs)
-else
-    echo "Missing .env file: $ENV_FILE"
-    exit 1
 fi
 
 cd "$WORKDIR" || { echo "Failed to cd to $WORKDIR"; exit 1; }
