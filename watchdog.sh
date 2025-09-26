@@ -1,4 +1,5 @@
 #!/bin/bash
+ENV_FILE="$(dirname "$0")/.env"
 
 # === Load config from .env early ===
 if [ -f "$ENV_FILE" ]; then
