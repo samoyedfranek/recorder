@@ -10,7 +10,7 @@ else
 fi
 
 # === Locate and update AUDIO_INPUT_DEVICE based on arecord if AUTODETECT != true ===
-if [ "$AUTO_DETECT" != "true" ]; then
+if [ "$AUTO_DETECT" != "false" ]; then
     AUDIO_DEVICE_NAME="All-In-One-Cable"
 
     if arecord -l | grep -q "$AUDIO_DEVICE_NAME"; then
@@ -34,6 +34,7 @@ if [ "$AUTO_DETECT" != "true" ]; then
 else
     echo "AUTO_DETECT=true, skipping arecord detection."
 fi
+
 # === Detect and handle COM port ===
 COM_DEVICE=$(ls /dev/ttyACM* 2>/dev/null | head -n 1)
 CURRENT_COM_PORT=$(grep '^COM_PORT=' "$ENV_FILE" 2>/dev/null | cut -d'=' -f2)
