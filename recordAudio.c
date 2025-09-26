@@ -13,6 +13,7 @@
 
 #define SAMPLE_RATE 48000
 #define CHANNELS 1
+#define RECORDINGS_DIR "./recordings"
 #define PREBUFFER_SECONDS 1
 #define PREBUFFER_SIZE (SAMPLE_RATE * PREBUFFER_SECONDS)
 #define RECORDING_CHECK_INTERVAL 20
@@ -176,7 +177,7 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
                 struct tm *t = localtime(&now);
                 strftime(time_str, sizeof(time_str), "%Y%m%d_%H%M%S", t);
                 snprintf(filename, sizeof(filename), "%s_%s.wav", data->serial_name, time_str);
-                snprintf(final_file_path, sizeof(final_file_path), RECORDING_DIRECTORY "/%s", filename);
+                snprintf(final_file_path, sizeof(final_file_path),"%s/%s", RECORDING_DIRECTORY, filename);
 
                 if (write_wav_file(final_file_path, data->buffer, data->size, SAMPLE_RATE) == 0)
                 {
