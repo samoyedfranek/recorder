@@ -55,7 +55,7 @@ void extract_timestamp(const char *file_path, char *base_name, char *timestamp, 
     regfree(&regex);
 }
 
-int send_to_telegram(const char *file_path, const char *bot_token, char **chat_ids, const char *image_path)
+int send_to_telegram(const char *file_path, const char *bot_token, char **chat_ids)
 {
     CURL *curl;
     CURLcode res;
@@ -95,33 +95,33 @@ int send_to_telegram(const char *file_path, const char *bot_token, char **chat_i
     {
         struct curl_mime *mime;
         struct curl_mimepart *part;
-
-        // --- Optional: send image first ---
-        if (image_path != NULL && strlen(image_path) > 0)
+        if (COM_PORT != false)
         {
-            snprintf(url, sizeof(url), "https://api.telegram.org/bot%s/sendPhoto", bot_token);
-
-            mime = curl_mime_init(curl);
-
-            part = curl_mime_addpart(mime);
-            curl_mime_name(part, "chat_id");
-            curl_mime_data(part, chat_ids[i], CURL_ZERO_TERMINATED);
-
-            part = curl_mime_addpart(mime);
-            curl_mime_name(part, "photo");
-            curl_mime_filedata(part, image_path);
-
-            curl_easy_setopt(curl, CURLOPT_URL, url);
-            curl_easy_setopt(curl, CURLOPT_MIMEPOST, mime);
-            res = curl_easy_perform(curl);
-            curl_mime_free(mime);
-
-            if (res != CURLE_OK)
+            if ("frame.png" != NULL && strlen("frame.png") > 0)
             {
-                fprintf(stderr, "Failed to send photo to chat %s: %s\n", chat_ids[i], curl_easy_strerror(res));
+                snprintf(url, sizeof(url), "https://api.telegram.org/bot%s/sendPhoto", bot_token);
+
+                mime = curl_mime_init(curl);
+
+                part = curl_mime_addpart(mime);
+                curl_mime_name(part, "chat_id");
+                curl_mime_data(part, chat_ids[i], CURL_ZERO_TERMINATED);
+
+                part = curl_mime_addpart(mime);
+                curl_mime_name(part, "photo");
+                curl_mime_filedata(part, "frame.png");
+
+                curl_easy_setopt(curl, CURLOPT_URL, url);
+                curl_easy_setopt(curl, CURLOPT_MIMEPOST, mime);
+                res = curl_easy_perform(curl);
+                curl_mime_free(mime);
+
+                if (res != CURLE_OK)
+                {
+                    fprintf(stderr, "Failed to send photo to chat %s: %s\n", chat_ids[i], curl_easy_strerror(res));
+                }
             }
         }
-
         // --- Always send audio ---
         snprintf(url, sizeof(url), "https://api.telegram.org/bot%s/sendAudio", bot_token);
 

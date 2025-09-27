@@ -14,7 +14,7 @@
 #include "h/recordAudio.h"
 #include "h/getRadioImage.h"
 #include "h/config.h"
-const char *image_path = "frame.png";
+
 static void silent_alsa_error(const char *file, int line, const char *function,
                               int err, const char *fmt, ...) {}
 
@@ -76,7 +76,7 @@ void send_existing_files(const char *directory)
             if (S_ISREG(file_stat.st_mode))
             {
                 printf("Sending existing file: %s\n", file_path);
-                send_to_telegram(file_path, BOT_TOKEN, CHAT_IDS, image_path);
+                send_to_telegram(file_path, BOT_TOKEN, CHAT_IDS);
             }
         }
         else
@@ -169,7 +169,7 @@ void on_new_file_created(uv_fs_event_t *handle, const char *filename, int events
             return;
         }
 
-        send_to_telegram(dest_path, BOT_TOKEN, CHAT_IDS, image_path);
+        send_to_telegram(dest_path, BOT_TOKEN, CHAT_IDS);
     }
 }
 
