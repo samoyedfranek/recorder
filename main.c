@@ -13,7 +13,7 @@
 #include "h/telegramSend.h"
 #include "h/recordAudio.h"
 #include "h/config.h"
-const char *image_path = image_path;
+const char *image_path = "frame.png";
 static void silent_alsa_error(const char *file, int line, const char *function,
                               int err, const char *fmt, ...) {}
 
