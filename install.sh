@@ -23,11 +23,17 @@ BOT_TOKEN=your_bot_token_here
 CHAT_ID=chat_id_1,chat_id_2
 COM_PORT=/dev/ttyACM0
 RECORDING_DIRECTORY=./recordings
-AUDIO_INPUT_DEVICE=0
 USER_NAME=$(whoami)
 WORKDIR=$SCRIPT_DIR
 RECORDER_CMD=$SCRIPT_DIR/recorder
 REPO_BRANCH=main
+AMPLITUDE_THRESHOLD=500
+DEBUG_AMPLITUDE=true
+LIVE_LISTEN=false
+EXTRA_TEXT=HOST ..
+CHUNK_SIZE=1024
+SILENCE_THRESHOLD=5
+REMOVE_LAST_SECONDS=5
 EOF
     echo "✅ .env file created. Please update it with your actual values!"
 fi
@@ -40,7 +46,6 @@ echo "🔧 Compiling recorder..."
 gcc -o "$SCRIPT_DIR/recorder" main.c open_serial_port.c recordAudio.c \
     telegramSend.c config.c write_wav_file.c \
     -lportaudio -lm -lserialport -lpthread -lcurl -luv -lasound -ljack \
-    | tee "$SCRIPT_DIR/watchdog.log"
 echo "✅ Compilation complete."
 
 # === Make watchdog executable ===
@@ -89,5 +94,4 @@ sudo systemctl start recorder.service
 echo ""
 echo "✅ Install complete!"
 echo "🔍 Check status:  sudo systemctl status recorder.service"
-echo "📄 Log file:      $WORKDIR/watchdog.log"
 echo "📝 .env config:   $ENV_FILE"

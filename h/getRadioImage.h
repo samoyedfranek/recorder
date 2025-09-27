@@ -9,4 +9,4 @@ void radio_update(void);
 
 void radio_close(void);
 
-#endif // GETRADIOIMAGE_H
+#endif

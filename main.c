@@ -57,11 +57,8 @@ void send_existing_files(const char *directory)
 
     while ((entry = readdir(dir)) != NULL)
     {
-        // Skip current/parent dirs
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
             continue;
-
-        // Filter: skip invalid or double .wav files
         if (strstr(entry->d_name, ".wav.wav") != NULL)
             continue;
         if (strstr(entry->d_name, ".wav") == NULL)
@@ -92,10 +89,8 @@ void on_new_file_created(uv_fs_event_t *handle, const char *filename, int events
 {
     if (filename == NULL)
         return;
-
     if (strstr(filename, ".wav.wav") != NULL)
         return;
-
     if (strstr(filename, ".wav") == NULL)
         return;
 
@@ -143,7 +138,6 @@ void on_new_file_created(uv_fs_event_t *handle, const char *filename, int events
         fclose(src);
         fclose(dst);
 
-        // Usuń oryginał po skopiowaniu
         if (remove(full_path) == 0)
         {
             printf("Removed original file: %s\n", full_path);

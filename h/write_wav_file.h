@@ -5,4 +5,4 @@
 
 int write_wav_file(const char *filename, short *data, size_t numSamples, int sampleRate);
 
-#endif // WRITE_WAV_FILE_H
+#endif

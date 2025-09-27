@@ -11,8 +11,6 @@ char *CHAT_IDS[21] = {NULL}; // max 20 IDs + NULL terminator
 int chat_ids_count = 0;
 char COM_PORT[128] = "";
 char RECORDING_DIRECTORY[128] = "";
-int AUDIO_INPUT_DEVICE = 0;
-int AUDIO_OUTPUT_DEVICE = 0;
 char USER_NAME[64] = "";
 char WORKDIR[128] = "";
 char RECORDER_CMD[256] = "";
@@ -24,7 +22,6 @@ char EXTRA_TEXT[64] = "";
 int SILENCE_THRESHOLD = 0;
 int REMOVE_LAST_SECONDS = 0;
 
-// Free previously allocated CHAT_IDS strings to prevent memory leaks
 void free_chat_ids()
 {
     for (int i = 0; i < chat_ids_count; i++)
@@ -36,7 +33,6 @@ void free_chat_ids()
     CHAT_IDS[0] = NULL;
 }
 
-// Parse CHAT_ID string (comma-separated) into CHAT_IDS array
 void parse_chat_id_array(const char *chat_id_str)
 {
     free_chat_ids();
@@ -55,11 +51,9 @@ void parse_chat_id_array(const char *chat_id_str)
 
     while (token != NULL && chat_ids_count < 20)
     {
-        // Trim leading spaces
         while (*token == ' ')
             token++;
 
-        // Trim trailing spaces
         char *end = token + strlen(token) - 1;
         while (end > token && isspace((unsigned char)*end))
         {
@@ -78,16 +72,14 @@ void parse_chat_id_array(const char *chat_id_str)
         token = strtok(NULL, ",");
     }
 
-    CHAT_IDS[chat_ids_count] = NULL; // Null-terminate the array
+    CHAT_IDS[chat_ids_count] = NULL;
 }
 
-// Helper to trim leading and trailing whitespace in-place
 static void trim(char *str)
 {
     if (!str)
         return;
 
-    // Trim leading whitespace
     char *start = str;
     while (isspace((unsigned char)*start))
         start++;
@@ -95,7 +87,6 @@ static void trim(char *str)
     if (start != str)
         memmove(str, start, strlen(start) + 1);
 
-    // Trim trailing whitespace
     char *end = str + strlen(str) - 1;
     while (end >= str && isspace((unsigned char)*end))
     {
@@ -104,19 +95,16 @@ static void trim(char *str)
     }
 }
 
-// Parse boolean from string
 static bool parse_bool(const char *str)
 {
     return (strcmp(str, "1") == 0 || strcasecmp(str, "true") == 0);
 }
 
-// Parse int safely
 static int parse_int(const char *str)
 {
     return atoi(str);
 }
 
-// Load .env file and parse key=value lines
 int load_env(const char *filename)
 {
     FILE *file = fopen(filename, "r");
@@ -143,7 +131,6 @@ int load_env(const char *filename)
         trim(key);
         trim(value);
 
-        // Remove surrounding quotes if any
         size_t len = strlen(value);
         if (len >= 2 && value[0] == '"' && value[len - 1] == '"')
         {
@@ -170,14 +157,6 @@ int load_env(const char *filename)
         {
             strncpy(RECORDING_DIRECTORY, value, sizeof(RECORDING_DIRECTORY) - 1);
             RECORDING_DIRECTORY[sizeof(RECORDING_DIRECTORY) - 1] = '\0';
-        }
-        else if (strcmp(key, "AUDIO_INPUT_DEVICE") == 0)
-        {
-            AUDIO_INPUT_DEVICE = parse_int(value);
-        }
-        else if (strcmp(key, "AUDIO_OUTPUT_DEVICE") == 0)
-        {
-            AUDIO_OUTPUT_DEVICE = parse_int(value);
         }
         else if (strcmp(key, "USER_NAME") == 0)
         {
@@ -228,7 +207,6 @@ int load_env(const char *filename)
 
     fclose(file);
 
-    // After loading, parse CHAT_ID string into CHAT_IDS array
     parse_chat_id_array(CHAT_ID);
 
     return 0;
