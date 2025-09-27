@@ -86,9 +86,11 @@ void on_new_file_created(uv_fs_event_t *handle, const char *filename, int events
     if (filename == NULL)
         return;
 
-    // Ignoruj pliki kończące się na ".wav.wav"
     if (strstr(filename, ".wav.wav") != NULL)
         return;
+
+    if (strstr(filename, ".wav") == NULL)
+        return; 
 
     if ((events & UV_RENAME) || (events & UV_CHANGE))
     {
