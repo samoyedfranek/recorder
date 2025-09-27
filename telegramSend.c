@@ -121,7 +121,6 @@ int send_to_telegram(const char *file_path, const char *bot_token, char **chat_i
             }
         }
 
-        // --- Always send audio ---
         snprintf(url, sizeof(url), "https://api.telegram.org/bot%s/sendAudio", bot_token);
 
         mime = curl_mime_init(curl);
@@ -134,7 +133,6 @@ int send_to_telegram(const char *file_path, const char *bot_token, char **chat_i
         curl_mime_name(part, "chat_id");
         curl_mime_data(part, chat_ids[i], CURL_ZERO_TERMINATED);
 
-        // Optional caption for audio
         if (timestamp[0] != '\0')
         {
             char escaped_caption[512];

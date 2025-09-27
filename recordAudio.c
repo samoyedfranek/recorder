@@ -202,6 +202,30 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
     return paContinue;
 }
 
+int findInputDeviceByName(const char *name)
+{
+    int numDevices = Pa_GetDeviceCount();
+    if (numDevices < 0)
+    {
+        fprintf(stderr, "Pa_GetDeviceCount returned %d\n", numDevices);
+        return paNoDevice;
+    }
+
+    for (int i = 0; i < numDevices; i++)
+    {
+        const PaDeviceInfo *info = Pa_GetDeviceInfo(i);
+        if (!info)
+            continue;
+
+        if (info->maxInputChannels > 0 && strstr(info->name, name) != NULL)
+        {
+            return i;
+        }
+    }
+
+    return paNoDevice;
+}
+
 void recorder(const char *com_port)
 {
     PaError err;
@@ -218,6 +242,7 @@ void recorder(const char *com_port)
     data.chunk_size = CHUNK_SIZE;
     data.recording_total_chunks = 0;
 
+    const char *AUDIO_DEVICE_NAME = "All-In-One-Cable";
     char *serial_name = "radio"; // will be added soon open_serial_port(com_port)
     snprintf(data.serial_name, sizeof(data.serial_name), "%s", serial_name ? serial_name : "unknown");
 
@@ -231,30 +256,18 @@ void recorder(const char *com_port)
     }
 
     PaStreamParameters inputParams;
-    if (AUDIO_INPUT_DEVICE < 0 || AUDIO_INPUT_DEVICE >= Pa_GetDeviceCount())
-    {
-        fprintf(stderr, "Invalid AUDIO_INPUT_DEVICE index (%d). Falling back to default.\n", AUDIO_INPUT_DEVICE);
-        inputParams.device = Pa_GetDefaultInputDevice();
-    }
-    else
-    {
-        const PaDeviceInfo *info = Pa_GetDeviceInfo(AUDIO_INPUT_DEVICE);
-        if (!info || info->maxInputChannels < CHANNELS)
-        {
-            fprintf(stderr, "Invalid device %d. Using default.\n", AUDIO_INPUT_DEVICE);
-            inputParams.device = Pa_GetDefaultInputDevice();
-        }
-        else
-        {
-            inputParams.device = AUDIO_INPUT_DEVICE;
-        }
-    }
 
-    if (inputParams.device == paNoDevice)
+    int deviceIndex = findInputDeviceByName(AUDIO_DEVICE_NAME);
+
+    if (deviceIndex == paNoDevice)
     {
         fprintf(stderr, "No default input device.\n");
         Pa_Terminate();
         return;
+    }
+    else
+    {
+        inputParams.device = deviceIndex;
     }
 
     inputParams.channelCount = CHANNELS;
