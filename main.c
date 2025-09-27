@@ -14,7 +14,7 @@
 #include "h/recordAudio.h"
 #include "h/getRadioImage.h"
 #include "h/config.h"
-const char *image_path = "recordings/frame.png";
+const char *image_path = "frame.png";
 static void silent_alsa_error(const char *file, int line, const char *function,
                               int err, const char *fmt, ...) {}
 
