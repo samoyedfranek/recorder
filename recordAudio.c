@@ -176,7 +176,7 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
                 struct tm *t = localtime(&now);
                 strftime(time_str, sizeof(time_str), "%Y%m%d_%H%M%S", t);
                 snprintf(filename, sizeof(filename), "%s_%s.wav", data->serial_name, time_str);
-                snprintf(final_file_path, sizeof(final_file_path),"%s/%s", RECORDING_DIRECTORY, filename);
+                snprintf(final_file_path, sizeof(final_file_path), "%s/%s", RECORDING_DIRECTORY, filename);
 
                 if (write_wav_file(final_file_path, data->buffer, data->size, SAMPLE_RATE) == 0)
                 {
@@ -218,7 +218,7 @@ void recorder(const char *com_port)
     data.chunk_size = CHUNK_SIZE;
     data.recording_total_chunks = 0;
 
-    char *serial_name = open_serial_port(com_port);
+    char *serial_name = "radio"; // will be added soon open_serial_port(com_port)
     snprintf(data.serial_name, sizeof(data.serial_name), "%s", serial_name ? serial_name : "unknown");
 
     printf("Started recording on serial: %s\n", data.serial_name);
