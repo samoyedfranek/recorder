@@ -131,7 +131,7 @@ static void save_frame_as_png()
 {
     uint8_t rgb[WIDTH * HEIGHT * 3];
     framebuffer_to_rgb(rgb);
-    stbi_write_png("frame.png", WIDTH, HEIGHT, 3, rgb, WIDTH * 3);
+    stbi_write_png("recordings/frame.png", WIDTH, HEIGHT, 3, rgb, WIDTH * 3);
 }
 
 static uint64_t millis()

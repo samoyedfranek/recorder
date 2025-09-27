@@ -165,7 +165,6 @@ void on_new_file_created(uv_fs_event_t *handle, const char *filename, int events
 
 void *monitor_directory_thread(void *arg)
 {
-    const char *directory = (const char *)arg;
     uv_loop_t loop;
 
     if (uv_loop_init(&loop))
@@ -183,9 +182,9 @@ void *monitor_directory_thread(void *arg)
         return NULL;
     }
 
-    fs_event.data = (void *)directory;
+    fs_event.data = RECORDING_DIRECTORY;
 
-    status = uv_fs_event_start(&fs_event, on_new_file_created, directory, UV_FS_EVENT_RECURSIVE);
+    status = uv_fs_event_start(&fs_event, on_new_file_created, RECORDING_DIRECTORY, UV_FS_EVENT_RECURSIVE);
     if (status != 0)
     {
         fprintf(stderr, "Error starting file event monitoring: %s\n", uv_strerror(status));
@@ -194,7 +193,7 @@ void *monitor_directory_thread(void *arg)
         return NULL;
     }
 
-    printf("Monitoring directory: %s\n", directory);
+    printf("Monitoring directory: %s\n", RECORDING_DIRECTORY);
     uv_run(&loop, UV_RUN_DEFAULT);
 
     uv_fs_event_stop(&fs_event);
@@ -208,6 +207,23 @@ void *recorder_thread(void *arg)
     send_telegram_status(BOT_TOKEN, CHAT_IDS, "Rozpoczynanie nagrywania");
     fflush(stdout);
     recorder(COM_PORT);
+    return NULL;
+}
+void *radio_thread(void *arg)
+{
+    if (radio_init(COM_PORT) != 0)
+    {
+        fprintf(stderr, "Failed to initialize radio on port %s\n", COM_PORT);
+        return NULL;
+    }
+
+    while (1)
+    {
+        radio_update();
+        usleep(1000);
+    }
+
+    radio_close();
     return NULL;
 }
 
@@ -228,7 +244,7 @@ int main(void)
         return 1;
     }
 
-    pthread_t recorder_thread_id, monitor_thread_id;
+    pthread_t recorder_thread_id, monitor_thread_id, radio_thread_id;
 
     send_existing_files(RECORDING_DIRECTORY);
 
@@ -238,14 +254,20 @@ int main(void)
         return 1;
     }
 
-    if (pthread_create(&monitor_thread_id, NULL, monitor_directory_thread, (void *)RECORDING_DIRECTORY) != 0)
+    if (pthread_create(&monitor_thread_id, NULL, monitor_directory_thread, NULL) != 0)
     {
         perror("Failed to create monitor thread");
+        return 1;
+    }
+    if (pthread_create(&radio_thread_id, NULL, radio_thread, NULL) != 0)
+    {
+        perror("Failed to create radio thread");
         return 1;
     }
 
     pthread_join(recorder_thread_id, NULL);
     pthread_join(monitor_thread_id, NULL);
+    pthread_join(radio_thread_id, NULL);
 
     printf("All files processed successfully.\n");
     return 0;
