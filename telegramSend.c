@@ -95,9 +95,9 @@ int send_to_telegram(const char *file_path, const char *bot_token, char **chat_i
     {
         struct curl_mime *mime;
         struct curl_mimepart *part;
-        if (COM_PORT != false)
+        if ()
         {
-            if ("frame.png" != NULL && strlen("frame.png") > 0)
+            if ("frame.png" != NULL && strlen("frame.png") > 0 && COM_PORT != "false")
             {
                 snprintf(url, sizeof(url), "https://api.telegram.org/bot%s/sendPhoto", bot_token);
 
