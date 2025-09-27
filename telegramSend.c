@@ -55,7 +55,7 @@ void extract_timestamp(const char *file_path, char *base_name, char *timestamp, 
     regfree(&regex);
 }
 
-int send_to_telegram(const char *file_path, const char *bot_token, char **chat_ids)
+int send_to_telegram(const char *file_path, const char *bot_token, char **chat_ids, const char *image_path)
 {
     CURL *curl;
     CURLcode res;
@@ -100,41 +100,46 @@ int send_to_telegram(const char *file_path, const char *bot_token, char **chat_i
 
         mime = curl_mime_init(curl);
 
+        // Audio file
         part = curl_mime_addpart(mime);
         curl_mime_name(part, "audio");
         curl_mime_filedata(part, new_file_path);
 
+        // Optional cover image
+        if (image_path != NULL && strlen(image_path) > 0)
+        {
+            part = curl_mime_addpart(mime);
+            curl_mime_name(part, "thumb");
+            curl_mime_filedata(part, image_path);
+        }
+
+        // Chat ID
         part = curl_mime_addpart(mime);
         curl_mime_name(part, "chat_id");
         curl_mime_data(part, chat_ids[i], CURL_ZERO_TERMINATED);
 
+        // Caption (with timestamp + extra text)
         if (timestamp[0] != '\0')
         {
             char escaped_caption[512];
             escape_markdown_v2(escaped_caption, timestamp, sizeof(escaped_caption));
 
-            // Append EXTRA_TEXT if available
             char escaped_extra[256] = "";
             if (EXTRA_TEXT[0] != '\0')
-            {
                 escape_markdown_v2(escaped_extra, EXTRA_TEXT, sizeof(escaped_extra));
-            }
 
             char caption[1024];
             if (escaped_extra[0] != '\0')
-            {
                 snprintf(caption, sizeof(caption), "%s\n*COŚ SIĘ DZIEJE*\n%s", escaped_caption, escaped_extra);
-            }
             else
-            {
                 snprintf(caption, sizeof(caption), "%s\n*COŚ SIĘ DZIEJE*", escaped_caption);
-            }
 
             part = curl_mime_addpart(mime);
             curl_mime_name(part, "caption");
             curl_mime_data(part, caption, CURL_ZERO_TERMINATED);
         }
 
+        // Parse mode
         part = curl_mime_addpart(mime);
         curl_mime_name(part, "parse_mode");
         curl_mime_data(part, "MarkdownV2", CURL_ZERO_TERMINATED);
