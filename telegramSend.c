@@ -84,8 +84,6 @@ int send_to_telegram(const char *file_path, const char *bot_token, char **chat_i
         return 0;
     }
 
-    snprintf(url, sizeof(url), "https://api.telegram.org/bot%s/sendAudio", bot_token);
-
     curl_global_init(CURL_GLOBAL_DEFAULT);
     curl = curl_easy_init();
     if (!curl)
@@ -98,27 +96,72 @@ int send_to_telegram(const char *file_path, const char *bot_token, char **chat_i
         struct curl_mime *mime;
         struct curl_mimepart *part;
 
+        // --- Optional: send image first ---
+        if (image_path != NULL && strlen(image_path) > 0)
+        {
+            snprintf(url, sizeof(url), "https://api.telegram.org/bot%s/sendPhoto", bot_token);
+
+            mime = curl_mime_init(curl);
+
+            part = curl_mime_addpart(mime);
+            curl_mime_name(part, "chat_id");
+            curl_mime_data(part, chat_ids[i], CURL_ZERO_TERMINATED);
+
+            part = curl_mime_addpart(mime);
+            curl_mime_name(part, "photo");
+            curl_mime_filedata(part, image_path);
+
+            // Caption for photo
+            if (timestamp[0] != '\0')
+            {
+                char escaped_caption[512];
+                escape_markdown_v2(escaped_caption, timestamp, sizeof(escaped_caption));
+
+                char escaped_extra[256] = "";
+                if (EXTRA_TEXT[0] != '\0')
+                    escape_markdown_v2(escaped_extra, EXTRA_TEXT, sizeof(escaped_extra));
+
+                char caption[1024];
+                if (escaped_extra[0] != '\0')
+                    snprintf(caption, sizeof(caption), "%s\n*COŚ SIĘ DZIEJE*\n%s", escaped_caption, escaped_extra);
+                else
+                    snprintf(caption, sizeof(caption), "%s\n*COŚ SIĘ DZIEJE*", escaped_caption);
+
+                part = curl_mime_addpart(mime);
+                curl_mime_name(part, "caption");
+                curl_mime_data(part, caption, CURL_ZERO_TERMINATED);
+
+                part = curl_mime_addpart(mime);
+                curl_mime_name(part, "parse_mode");
+                curl_mime_data(part, "MarkdownV2", CURL_ZERO_TERMINATED);
+            }
+
+            curl_easy_setopt(curl, CURLOPT_URL, url);
+            curl_easy_setopt(curl, CURLOPT_MIMEPOST, mime);
+            res = curl_easy_perform(curl);
+            curl_mime_free(mime);
+
+            if (res != CURLE_OK)
+            {
+                fprintf(stderr, "Failed to send photo to chat %s: %s\n", chat_ids[i], curl_easy_strerror(res));
+                // Don’t return, just continue to audio
+            }
+        }
+
+        // --- Always send audio ---
+        snprintf(url, sizeof(url), "https://api.telegram.org/bot%s/sendAudio", bot_token);
+
         mime = curl_mime_init(curl);
 
-        // Audio file
         part = curl_mime_addpart(mime);
         curl_mime_name(part, "audio");
         curl_mime_filedata(part, new_file_path);
 
-        // Optional cover image
-        if (image_path != NULL && strlen(image_path) > 0)
-        {
-            part = curl_mime_addpart(mime);
-            curl_mime_name(part, "thumb");
-            curl_mime_filedata(part, image_path);
-        }
-
-        // Chat ID
         part = curl_mime_addpart(mime);
         curl_mime_name(part, "chat_id");
         curl_mime_data(part, chat_ids[i], CURL_ZERO_TERMINATED);
 
-        // Caption (with timestamp + extra text)
+        // Optional caption for audio
         if (timestamp[0] != '\0')
         {
             char escaped_caption[512];
@@ -137,22 +180,20 @@ int send_to_telegram(const char *file_path, const char *bot_token, char **chat_i
             part = curl_mime_addpart(mime);
             curl_mime_name(part, "caption");
             curl_mime_data(part, caption, CURL_ZERO_TERMINATED);
-        }
 
-        // Parse mode
-        part = curl_mime_addpart(mime);
-        curl_mime_name(part, "parse_mode");
-        curl_mime_data(part, "MarkdownV2", CURL_ZERO_TERMINATED);
+            part = curl_mime_addpart(mime);
+            curl_mime_name(part, "parse_mode");
+            curl_mime_data(part, "MarkdownV2", CURL_ZERO_TERMINATED);
+        }
 
         curl_easy_setopt(curl, CURLOPT_URL, url);
         curl_easy_setopt(curl, CURLOPT_MIMEPOST, mime);
-
         res = curl_easy_perform(curl);
         curl_mime_free(mime);
 
         if (res != CURLE_OK)
         {
-            fprintf(stderr, "Failed to send file %s to chat %s: %s\n", new_file_path, chat_ids[i], curl_easy_strerror(res));
+            fprintf(stderr, "Failed to send audio %s to chat %s: %s\n", new_file_path, chat_ids[i], curl_easy_strerror(res));
             curl_easy_cleanup(curl);
             return 0;
         }
