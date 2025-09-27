@@ -230,7 +230,7 @@ void *radio_thread(void *arg)
     while (1)
     {
         radio_update();
-        usleep(1000);
+        usleep(100);
     }
 
     radio_close();
