@@ -57,7 +57,14 @@ void send_existing_files(const char *directory)
 
     while ((entry = readdir(dir)) != NULL)
     {
+        // Skip current/parent dirs
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
+            continue;
+
+        // Filter: skip invalid or double .wav files
+        if (strstr(entry->d_name, ".wav.wav") != NULL)
+            continue;
+        if (strstr(entry->d_name, ".wav") == NULL)
             continue;
 
         char file_path[512];
@@ -90,7 +97,7 @@ void on_new_file_created(uv_fs_event_t *handle, const char *filename, int events
         return;
 
     if (strstr(filename, ".wav") == NULL)
-        return; 
+        return;
 
     if ((events & UV_RENAME) || (events & UV_CHANGE))
     {
