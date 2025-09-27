@@ -9,7 +9,6 @@
 #include <fcntl.h>
 #include <termios.h>
 #include <sys/time.h>
-#include <sys/select.h>
 
 #define WIDTH 128
 #define HEIGHT 64
@@ -80,35 +79,42 @@ static void apply_diff(uint8_t *diff, int size)
     }
 }
 
-// --- Read frames efficiently ---
+// --- Read frame 1 byte at a time ---
 static int read_frame()
 {
     if (serial_fd < 0) return 0;
-    uint8_t buffer[2048];
-    int n = read(serial_fd, buffer, sizeof(buffer));
-    if (n <= 0) return 0;
-
-    for (int i = 0; i < n - 4; i++)
+    uint8_t b;
+    while (1)
     {
-        if (buffer[i] == HEADER0 && buffer[i+1] == HEADER1)
-        {
-            uint8_t t = buffer[i+2];
-            int size = (buffer[i+3] << 8) | buffer[i+4];
-            if (i + 5 + size > n) break;
+        int n = read(serial_fd, &b, 1);
+        if (n <= 0) return 0;
 
+        if (b == HEADER0)
+        {
+            uint8_t b2;
+            if (read(serial_fd, &b2, 1) <= 0) return 0;
+            if (b2 != HEADER1) continue;
+
+            uint8_t t;
+            uint8_t size_bytes[2];
+            if (read(serial_fd, &t, 1) <= 0) return 0;
+            if (read(serial_fd, size_bytes, 2) <= 0) return 0;
+
+            int size = (size_bytes[0] << 8) | size_bytes[1];
             if (t == TYPE_SCREENSHOT && size == FRAME_SIZE)
             {
-                memcpy(framebuffer, &buffer[i+5], FRAME_SIZE);
+                if (read(serial_fd, framebuffer, FRAME_SIZE) <= 0) return 0;
                 return 1;
             }
             else if (t == TYPE_DIFF && size % 9 == 0)
             {
-                apply_diff(&buffer[i+5], size);
+                uint8_t diff[size];
+                if (read(serial_fd, diff, size) <= 0) return 0;
+                apply_diff(diff, size);
                 return 1;
             }
         }
     }
-    return 0;
 }
 
 // --- Framebuffer to RGB ---
@@ -146,7 +152,6 @@ int radio_init(const char *port)
     serial_fd = open_serial(port);
     if (serial_fd < 0) return -1;
 
-    // wait for first frame
     while (!read_frame()) send_keepalive();
     last_time = millis();
     memcpy(last_frame, framebuffer, FRAME_SIZE);
@@ -157,17 +162,9 @@ void radio_update(void)
 {
     if (serial_fd < 0) return;
 
-    // wait for data with select (low CPU)
-    fd_set fds;
-    struct timeval tv = {0, 500}; // 0.5 ms
-    FD_ZERO(&fds);
-    FD_SET(serial_fd, &fds);
-    int ret = select(serial_fd + 1, &fds, NULL, NULL, &tv);
-    if (ret > 0) read_frame();
-
+    read_frame();
     send_keepalive();
 
-    // save frame every 100ms if changed
     uint64_t now = millis();
     if (now - last_time >= 100)
     {
