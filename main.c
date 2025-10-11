@@ -263,15 +263,15 @@ int main(void)
         perror("Failed to create monitor thread");
         return 1;
     }
-    if (pthread_create(&radio_thread_id, NULL, radio_thread, NULL) != 0)
-    {
-        perror("Failed to create radio thread");
-        return 1;
-    }
+    // if (pthread_create(&radio_thread_id, NULL, radio_thread, NULL) != 0)
+    // {
+    //     perror("Failed to create radio thread");
+    //     return 1;
+    // }
 
     pthread_join(recorder_thread_id, NULL);
     pthread_join(monitor_thread_id, NULL);
-    pthread_join(radio_thread_id, NULL);
+    // pthread_join(radio_thread_id, NULL);
 
     printf("All files processed successfully.\n");
     return 0;
