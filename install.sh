@@ -44,7 +44,7 @@ export $(grep -v '^#' "$ENV_FILE" | xargs)
 # === Build recorder ===
 echo "🔧 Compiling recorder..."
 gcc -o "$SCRIPT_DIR/recorder" main.c open_serial_port.c recordAudio.c \
-    telegramSend.c config.c write_wav_file.c \
+    telegramSend.c config.c write_wav_file.c getRadioImage.c \
     -lportaudio -lm -lserialport -lpthread -lcurl -luv -lasound -ljack \
 echo "✅ Compilation complete."
 
