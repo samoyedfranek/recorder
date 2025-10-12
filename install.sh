@@ -43,9 +43,12 @@ export $(grep -v '^#' "$ENV_FILE" | xargs)
 
 # === Build recorder ===
 echo "🔧 Compiling recorder..."
+SCRIPT_DIR="$(dirname "$(realpath "$0")")"
+
 gcc -o "$SCRIPT_DIR/recorder" main.c open_serial_port.c recordAudio.c \
     telegramSend.c config.c write_wav_file.c getRadioImage.c \
-    -lportaudio -lm -lserialport -lpthread -lcurl -luv -lasound -ljack \
+    -lportaudio -lm -lserialport -lpthread -lcurl -luv -lasound -ljack
+
 echo "✅ Compilation complete."
 
 # === Make watchdog executable ===
