@@ -32,6 +32,7 @@ typedef struct
     short prebuffer[PREBUFFER_SIZE];
     size_t prebuffer_index;
     int prebuffer_full;
+    int live_listen; 
 } AudioData;
 
 static int audioCallback(const void *inputBuffer, void *outputBuffer,
@@ -42,6 +43,23 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
 {
     AudioData *data = (AudioData *)userData;
     const short *input = (const short *)inputBuffer;
+    short *output = (short *)outputBuffer; 
+
+    // --- LIVE LISTEN LOGIC ---
+    if (output)
+    {
+        if (data->live_listen && input)
+        {
+            // Copy input directly to output (pass-through)
+            memcpy(output, input, framesPerBuffer * sizeof(short));
+        }
+        else
+        {
+            // Mute output if live listen is off or no input
+            memset(output, 0, framesPerBuffer * sizeof(short));
+        }
+    }
+    // -------------------------
 
     if (!input)
     {
@@ -225,7 +243,6 @@ int findInputDeviceByName(const char *name)
 
     return paNoDevice;
 }
-
 void recorder(const char *com_port)
 {
     PaError err;
@@ -241,12 +258,16 @@ void recorder(const char *com_port)
     data.amplitude_threshold = AMPLITUDE_THRESHOLD;
     data.chunk_size = CHUNK_SIZE;
     data.recording_total_chunks = 0;
+    data.live_listen = LIVE_LISTEN; // <--- NEW: Set struct value from config
 
     const char *AUDIO_DEVICE_NAME = "All-In-One-Cable";
-    char *serial_name = "radio"; // will be added soon open_serial_port(com_port)
+    char *serial_name = "radio"; 
     snprintf(data.serial_name, sizeof(data.serial_name), "%s", serial_name ? serial_name : "unknown");
 
     printf("Started recording on serial: %s\n", data.serial_name);
+    if (data.live_listen) {
+        printf("Live Listen ENABLED (Outputting to default speakers)\n");
+    }
 
     err = Pa_Initialize();
     if (err != paNoError)
@@ -255,27 +276,56 @@ void recorder(const char *com_port)
         return;
     }
 
+    // --- INPUT PARAMETERS ---
     PaStreamParameters inputParams;
+    int inputDeviceIndex = findInputDeviceByName(AUDIO_DEVICE_NAME);
 
-    int deviceIndex = findInputDeviceByName(AUDIO_DEVICE_NAME);
-
-    if (deviceIndex == paNoDevice)
+    if (inputDeviceIndex == paNoDevice)
     {
         fprintf(stderr, "No default input device.\n");
         Pa_Terminate();
         return;
     }
-    else
-    {
-        inputParams.device = deviceIndex;
-    }
-
+    
+    inputParams.device = inputDeviceIndex;
     inputParams.channelCount = CHANNELS;
     inputParams.sampleFormat = paInt16;
     inputParams.suggestedLatency = Pa_GetDeviceInfo(inputParams.device)->defaultLowInputLatency;
     inputParams.hostApiSpecificStreamInfo = NULL;
 
-    err = Pa_OpenStream(&stream, &inputParams, NULL, SAMPLE_RATE, data.chunk_size, paClipOff, audioCallback, &data);
+    // --- OUTPUT PARAMETERS (NEW) ---
+    PaStreamParameters outputParams;
+    PaStreamParameters *pOutputParams = NULL; // Pointer to pass to OpenStream
+
+    if (data.live_listen)
+    {
+        outputParams.device = Pa_GetDefaultOutputDevice();
+        if (outputParams.device == paNoDevice)
+        {
+            fprintf(stderr, "Warning: Live listen enabled but no output device found. Disabling live listen.\n");
+            data.live_listen = 0;
+        }
+        else
+        {
+            outputParams.channelCount = CHANNELS;
+            outputParams.sampleFormat = paInt16;
+            outputParams.suggestedLatency = Pa_GetDeviceInfo(outputParams.device)->defaultLowOutputLatency;
+            outputParams.hostApiSpecificStreamInfo = NULL;
+            pOutputParams = &outputParams; // Set the pointer to our params
+        }
+    }
+
+    // --- OPEN STREAM ---
+    // Note: We pass pOutputParams (which is either &outputParams or NULL)
+    err = Pa_OpenStream(&stream, 
+                        &inputParams, 
+                        pOutputParams, // <--- Changed from NULL
+                        SAMPLE_RATE, 
+                        data.chunk_size, 
+                        paClipOff, 
+                        audioCallback, 
+                        &data);
+
     if (err != paNoError)
     {
         fprintf(stderr, "Stream error: %s\n", Pa_GetErrorText(err));
