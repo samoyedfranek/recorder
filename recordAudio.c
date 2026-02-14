@@ -258,13 +258,19 @@ void recorder(const char *com_port)
     data.amplitude_threshold = AMPLITUDE_THRESHOLD;
     data.chunk_size = CHUNK_SIZE;
     data.recording_total_chunks = 0;
-    data.live_listen = LIVE_LISTEN; // <--- NEW: Set struct value from config
+    data.live_listen = LIVE_LISTEN;
 
-    const char *AUDIO_DEVICE_NAME = "All-In-One-Cable";
+    // --- CHANGE HERE: Target hw:0,0 directly ---
+    // PortAudio names usually format as "Device Name (hw:X,Y)"
+    // We search for "hw:0,0" to find the specific hardware card.
+    const char *AUDIO_DEVICE_NAME = "hw:0,0"; 
+    
     char *serial_name = "radio"; 
     snprintf(data.serial_name, sizeof(data.serial_name), "%s", serial_name ? serial_name : "unknown");
 
     printf("Started recording on serial: %s\n", data.serial_name);
+    printf("Looking for audio device: %s\n", AUDIO_DEVICE_NAME);
+
     if (data.live_listen) {
         printf("Live Listen ENABLED (Outputting to default speakers)\n");
     }
@@ -276,34 +282,45 @@ void recorder(const char *com_port)
         return;
     }
 
-    // --- INPUT PARAMETERS ---
     PaStreamParameters inputParams;
     int inputDeviceIndex = findInputDeviceByName(AUDIO_DEVICE_NAME);
 
     if (inputDeviceIndex == paNoDevice)
     {
-        fprintf(stderr, "No default input device.\n");
+        fprintf(stderr, "Error: Could not find input device matching '%s'.\n", AUDIO_DEVICE_NAME);
+        fprintf(stderr, "Available devices:\n");
+        // Print available devices to help debugging
+        int numDevices = Pa_GetDeviceCount();
+        for(int i=0; i<numDevices; i++) {
+            const PaDeviceInfo *info = Pa_GetDeviceInfo(i);
+            if(info->maxInputChannels > 0) {
+                fprintf(stderr, "  [%d] %s\n", i, info->name);
+            }
+        }
         Pa_Terminate();
         return;
     }
-    
-    inputParams.device = inputDeviceIndex;
+    else
+    {
+        printf("Found device at index %d: %s\n", inputDeviceIndex, Pa_GetDeviceInfo(inputDeviceIndex)->name);
+        inputParams.device = inputDeviceIndex;
+    }
+
     inputParams.channelCount = CHANNELS;
     inputParams.sampleFormat = paInt16;
     inputParams.suggestedLatency = Pa_GetDeviceInfo(inputParams.device)->defaultLowInputLatency;
     inputParams.hostApiSpecificStreamInfo = NULL;
 
-    // --- OUTPUT PARAMETERS (NEW) ---
+    // Output params logic for Live Listen
     PaStreamParameters outputParams;
-    PaStreamParameters *pOutputParams = NULL; // Pointer to pass to OpenStream
+    PaStreamParameters *pOutputParams = NULL;
 
     if (data.live_listen)
     {
         outputParams.device = Pa_GetDefaultOutputDevice();
         if (outputParams.device == paNoDevice)
         {
-            fprintf(stderr, "Warning: Live listen enabled but no output device found. Disabling live listen.\n");
-            data.live_listen = 0;
+            fprintf(stderr, "Warning: Live listen enabled but no output device found.\n");
         }
         else
         {
@@ -311,24 +328,18 @@ void recorder(const char *com_port)
             outputParams.sampleFormat = paInt16;
             outputParams.suggestedLatency = Pa_GetDeviceInfo(outputParams.device)->defaultLowOutputLatency;
             outputParams.hostApiSpecificStreamInfo = NULL;
-            pOutputParams = &outputParams; // Set the pointer to our params
+            pOutputParams = &outputParams;
         }
     }
 
-    // --- OPEN STREAM ---
-    // Note: We pass pOutputParams (which is either &outputParams or NULL)
-    err = Pa_OpenStream(&stream, 
-                        &inputParams, 
-                        pOutputParams, // <--- Changed from NULL
-                        SAMPLE_RATE, 
-                        data.chunk_size, 
-                        paClipOff, 
-                        audioCallback, 
-                        &data);
-
+    err = Pa_OpenStream(&stream, &inputParams, pOutputParams, SAMPLE_RATE, data.chunk_size, paClipOff, audioCallback, &data);
     if (err != paNoError)
     {
         fprintf(stderr, "Stream error: %s\n", Pa_GetErrorText(err));
+        // Fallback suggestion
+        if (strcmp(AUDIO_DEVICE_NAME, "hw:0,0") == 0) {
+             fprintf(stderr, "Tip: If 'hw:0,0' fails, try using 'plughw:0,0' (handles sample rate conversion) or check if another app is using the device.\n");
+        }
         Pa_Terminate();
         return;
     }
