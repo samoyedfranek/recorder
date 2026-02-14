@@ -43,31 +43,34 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
 {
     AudioData *data = (AudioData *)userData;
     const short *input = (const short *)inputBuffer;
-    short *output = (short *)outputBuffer;
+    short *output = (short *)outputBuffer; 
 
-    // --- LIVE LISTEN (Pass-through) LOGIC ---
+    // --- LIVE LISTEN LOGIC ---
+    // Only process output if the stream was opened with output enabled
     if (output)
     {
         if (data->live_listen && input)
         {
-            // COPY INPUT TO OUTPUT
-            // OPTIONAL: You can multiply samples here to boost volume 
-            // e.g., output[i] = input[i] * 2; (Requires loop instead of memcpy)
+            // Pass-through: Copy microphone input directly to speakers
             memcpy(output, input, framesPerBuffer * sizeof(short));
         }
         else
         {
-            // Mute output if disabled or no input to prevent static/buzzing
+            // Mute output to prevent static/noise if live listen is off or input dropped
             memset(output, 0, framesPerBuffer * sizeof(short));
         }
     }
-    // ----------------------------------------
+    // -------------------------
 
     if (!input)
     {
-        // Do not spam stderr, just return
+        // No input to record
         return paContinue;
     }
+
+    // --- RECORDING LOGIC STARTS HERE ---
+    
+    // 1. Update Prebuffer
     for (unsigned int i = 0; i < framesPerBuffer; i++)
     {
         data->prebuffer[data->prebuffer_index] = input[i];
@@ -76,6 +79,7 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
     if (data->prebuffer_index == 0)
         data->prebuffer_full = 1;
 
+    // 2. Check Amplitude
     int max_amplitude = 0;
     for (unsigned int i = 0; i < framesPerBuffer; i++)
     {
@@ -85,6 +89,7 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
     }
     time_t current_time = time(NULL);
 
+    // 3. Start Recording Trigger
     if (max_amplitude > data->amplitude_threshold && !data->recording)
     {
         printf("Recording started.\n");
@@ -99,8 +104,9 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
             return paAbort;
         }
 
+        // Copy prebuffer
         size_t pre_count = data->prebuffer_full ? PREBUFFER_SIZE : data->prebuffer_index;
-        size_t start_index = data->prebuffer_index; // Most recent sample
+        size_t start_index = data->prebuffer_index; 
 
         int start_offset = -1;
         for (size_t i = 0; i < pre_count; i++)
@@ -125,6 +131,7 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
         data->last_sound_time = current_time;
     }
 
+    // 4. Continue Recording
     if (data->recording)
     {
         if (data->size + framesPerBuffer > data->capacity)
@@ -146,27 +153,8 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
         if (data->recording_check_counter >= RECORDING_CHECK_INTERVAL)
         {
             data->recording_check_counter = 0;
-
-            double recording_time_sec = (double)data->size / SAMPLE_RATE;
-
-            time_t raw_time = time(NULL);
-            struct tm *time_info = localtime(&raw_time);
-            char datetime_str[64];
-            strftime(datetime_str, sizeof(datetime_str), "%Y-%m-%d %H:%M:%S", time_info);
-
-            struct tm *last_tm = localtime(&data->last_sound_time);
-            char last_sound_str[32];
-            strftime(last_sound_str, sizeof(last_sound_str), "%H:%M:%S", last_tm);
-
-            double silence_duration = difftime(raw_time, data->last_sound_time);
-            printf("[RECORDING] DateTime: %s | Last sound: %s | Silence: %.2fs | Max Amplitude: %d | Chunks: %d | Samples: %zu | Recording time: %.2fs\n",
-                   datetime_str,
-                   last_sound_str,
-                   silence_duration,
-                   max_amplitude,
-                   data->recording_total_chunks,
-                   data->size,
-                   recording_time_sec);
+            // Optional: Print status
+            // printf("Recording... Samples: %zu\n", data->size);
         }
 
         if (max_amplitude > data->amplitude_threshold)
@@ -174,6 +162,7 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
             data->last_sound_time = current_time;
         }
 
+        // 5. Stop Recording Logic
         if (difftime(current_time, data->last_sound_time) > SILENCE_THRESHOLD)
         {
             printf("Silence detected. Stopping recording...\n");
@@ -224,44 +213,49 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
 int findInputDeviceByName(const char *name)
 {
     int numDevices = Pa_GetDeviceCount();
-    if (numDevices < 0)
-    {
-        fprintf(stderr, "Pa_GetDeviceCount returned %d\n", numDevices);
-        return paNoDevice;
-    }
+    if (numDevices < 0) return paNoDevice;
 
     for (int i = 0; i < numDevices; i++)
     {
         const PaDeviceInfo *info = Pa_GetDeviceInfo(i);
-        if (!info)
-            continue;
-
+        if (!info) continue;
         if (info->maxInputChannels > 0 && strstr(info->name, name) != NULL)
-        {
             return i;
-        }
     }
-
     return paNoDevice;
-}void recorder(const char *com_port)
+}
+
+void recorder(const char *com_port)
 {
     PaError err;
     PaStream *stream;
     AudioData data = {0};
 
-    if (load_env(".env") != 0) printf("Failed to load config (using defaults)\n");
+    if (load_env(".env") != 0)
+    {
+        printf("Failed to load config\n");
+        return;
+    }
 
+    // Load config values
     data.amplitude_threshold = AMPLITUDE_THRESHOLD;
     data.chunk_size = CHUNK_SIZE;
     data.recording_total_chunks = 0;
-
-    // --- FORCE LIVE LISTEN ON ---
-    data.live_listen = 1; 
-    // ---------------------------
+    data.live_listen = LIVE_LISTEN; // Using the value from .env/config.h
 
     const char *AUDIO_DEVICE_NAME = "hw:0,0"; 
+    
     char *serial_name = "radio"; 
     snprintf(data.serial_name, sizeof(data.serial_name), "%s", serial_name ? serial_name : "unknown");
+
+    printf("Started recording on serial: %s\n", data.serial_name);
+    printf("Looking for audio device: %s\n", AUDIO_DEVICE_NAME);
+
+    if (data.live_listen) {
+        printf("Live Listen ENABLED in config\n");
+    } else {
+        printf("Live Listen DISABLED in config\n");
+    }
 
     err = Pa_Initialize();
     if (err != paNoError)
@@ -270,54 +264,54 @@ int findInputDeviceByName(const char *name)
         return;
     }
 
-    // 1. Setup Input (Microphone)
+    // --- INPUT SETUP ---
     PaStreamParameters inputParams;
     int inputDeviceIndex = findInputDeviceByName(AUDIO_DEVICE_NAME);
 
     if (inputDeviceIndex == paNoDevice)
     {
-        fprintf(stderr, "Error: Input device '%s' not found.\n", AUDIO_DEVICE_NAME);
+        fprintf(stderr, "Error: Could not find input device matching '%s'.\n", AUDIO_DEVICE_NAME);
         Pa_Terminate();
         return;
     }
+    
+    printf("Found input device: %s\n", Pa_GetDeviceInfo(inputDeviceIndex)->name);
     inputParams.device = inputDeviceIndex;
     inputParams.channelCount = CHANNELS;
     inputParams.sampleFormat = paInt16;
     inputParams.suggestedLatency = Pa_GetDeviceInfo(inputParams.device)->defaultLowInputLatency;
     inputParams.hostApiSpecificStreamInfo = NULL;
 
-    printf("Input Device: %s\n", Pa_GetDeviceInfo(inputDeviceIndex)->name);
-
-    // 2. Setup Output (Speakers)
+    // --- OUTPUT SETUP (Conditional) ---
     PaStreamParameters outputParams;
-    PaStreamParameters *pOutputParams = NULL;
+    PaStreamParameters *pOutputParams = NULL; // Default to NULL (No output)
 
     if (data.live_listen)
     {
-        int outputDeviceIndex = Pa_GetDefaultOutputDevice();
-        if (outputDeviceIndex == paNoDevice)
+        outputParams.device = Pa_GetDefaultOutputDevice();
+        if (outputParams.device == paNoDevice)
         {
-            fprintf(stderr, "Warning: No default output device found. Live listen disabled.\n");
-            data.live_listen = 0;
+            fprintf(stderr, "Warning: Live listen is TRUE but no default output device found.\n");
         }
         else
         {
-            outputParams.device = outputDeviceIndex;
             outputParams.channelCount = CHANNELS;
             outputParams.sampleFormat = paInt16;
             outputParams.suggestedLatency = Pa_GetDeviceInfo(outputParams.device)->defaultLowOutputLatency;
             outputParams.hostApiSpecificStreamInfo = NULL;
-            pOutputParams = &outputParams;
             
-            printf("Output Device (Live Listen): %s\n", Pa_GetDeviceInfo(outputDeviceIndex)->name);
+            // Assign the pointer so Pa_OpenStream uses it
+            pOutputParams = &outputParams;
+            printf("Output Device (Live Listen): %s\n", Pa_GetDeviceInfo(outputParams.device)->name);
         }
     }
 
-    // 3. Open Stream (Duplex)
-    // We use the output parameters here. If pOutputParams is NULL, it opens strictly for recording.
+    // --- OPEN STREAM ---
+    // We pass pOutputParams. If it is NULL, PortAudio opens an input-only stream.
+    // If it points to valid params, PortAudio opens a Full Duplex stream.
     err = Pa_OpenStream(&stream, 
                         &inputParams, 
-                        pOutputParams, // Passing this enables the output channel
+                        pOutputParams, 
                         SAMPLE_RATE, 
                         data.chunk_size, 
                         paClipOff, 
@@ -340,8 +334,7 @@ int findInputDeviceByName(const char *name)
         return;
     }
 
-    printf("Recorder running... (Press Ctrl+C to stop)\n");
-
+    // Keep program running
     while (1)
     {
         sleep(1);
