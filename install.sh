@@ -39,7 +39,15 @@ EOF
 fi
 
 # === Load .env variables ===
-export $(grep -v '^#' "$ENV_FILE" | xargs)
+if [ -f "$ENV_FILE" ]; then
+    set -a
+    source "$ENV_FILE"
+    set +a
+    echo "✅ Loaded environment variables from $ENV_FILE"
+else
+    echo "❌ Error: $ENV_FILE not found"
+    exit 1
+fi
 
 # === Build recorder ===
 echo "🔧 Compiling recorder..."
