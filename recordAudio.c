@@ -258,10 +258,10 @@ void recorder(const char *com_port)
     data.amplitude_threshold = AMPLITUDE_THRESHOLD;
     data.chunk_size = CHUNK_SIZE;
     data.recording_total_chunks = 0;
-    data.live_listen = LIVE_LISTEN; // <--- NEW: Set struct value from config
+    data.live_listen = LIVE_LISTEN;
 
     const char *AUDIO_DEVICE_NAME = "All-In-One-Cable";
-    char *serial_name = "radio"; 
+    char *serial_name = open_serial_port(COM_PORT); 
     snprintf(data.serial_name, sizeof(data.serial_name), "%s", serial_name ? serial_name : "unknown");
 
     printf("Started recording on serial: %s\n", data.serial_name);

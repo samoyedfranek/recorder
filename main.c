@@ -12,7 +12,6 @@
 #include <errno.h>
 #include "h/telegramSend.h"
 #include "h/recordAudio.h"
-#include "h/getRadioImage.h"
 #include "h/config.h"
 
 static void silent_alsa_error(const char *file, int line, const char *function,
@@ -213,23 +212,6 @@ void *recorder_thread(void *arg)
     recorder(COM_PORT);
     return NULL;
 }
-void *radio_thread(void *arg)
-{
-    if (radio_init(COM_PORT) != 0)
-    {
-        fprintf(stderr, "Failed to initialize radio on port %s\n", COM_PORT);
-        return NULL;
-    }
-
-    while (1)
-    {
-        radio_update();
-        usleep(100);
-    }
-
-    radio_close();
-    return NULL;
-}
 
 int main(void)
 {
@@ -263,15 +245,9 @@ int main(void)
         perror("Failed to create monitor thread");
         return 1;
     }
-    // if (pthread_create(&radio_thread_id, NULL, radio_thread, NULL) != 0)
-    // {
-    //     perror("Failed to create radio thread");
-    //     return 1;
-    // }
 
     pthread_join(recorder_thread_id, NULL);
     pthread_join(monitor_thread_id, NULL);
-    // pthread_join(radio_thread_id, NULL);
 
     printf("All files processed successfully.\n");
     return 0;
