@@ -32,7 +32,7 @@ typedef struct
     short prebuffer[PREBUFFER_SIZE];
     size_t prebuffer_index;
     int prebuffer_full;
-    int live_listen; 
+    int live_listen;
 } AudioData;
 
 static int audioCallback(const void *inputBuffer, void *outputBuffer,
@@ -43,23 +43,19 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
 {
     AudioData *data = (AudioData *)userData;
     const short *input = (const short *)inputBuffer;
-    short *output = (short *)outputBuffer; 
+    short *output = (short *)outputBuffer;
 
-    // --- LIVE LISTEN LOGIC ---
     if (output)
     {
         if (data->live_listen && input)
         {
-            // Copy input directly to output (pass-through)
             memcpy(output, input, framesPerBuffer * sizeof(short));
         }
         else
         {
-            // Mute output if live listen is off or no input
             memset(output, 0, framesPerBuffer * sizeof(short));
         }
     }
-    // -------------------------
 
     if (!input)
     {
@@ -86,10 +82,18 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
 
     if (max_amplitude > data->amplitude_threshold && !data->recording)
     {
-        printf("Recording started.\n");
         data->recording = 1;
         data->recording_check_counter = 0;
         data->size = 0;
+
+        char *actual_name = get_radio_name();
+        if (actual_name)
+        {
+            strncpy(data->serial_name, actual_name, sizeof(data->serial_name) - 1);
+            data->serial_name[sizeof(data->serial_name) - 1] = '\0';
+            free(actual_name);
+        }
+
         data->capacity = SAMPLE_RATE * 10;
         data->buffer = (short *)malloc(data->capacity * sizeof(short));
         if (!data->buffer)
@@ -99,7 +103,7 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
         }
 
         size_t pre_count = data->prebuffer_full ? PREBUFFER_SIZE : data->prebuffer_index;
-        size_t start_index = data->prebuffer_index; // Most recent sample
+        size_t start_index = data->prebuffer_index;
 
         int start_offset = -1;
         for (size_t i = 0; i < pre_count; i++)
@@ -158,7 +162,8 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
             strftime(last_sound_str, sizeof(last_sound_str), "%H:%M:%S", last_tm);
 
             double silence_duration = difftime(raw_time, data->last_sound_time);
-            printf("[RECORDING] DateTime: %s | Last sound: %s | Silence: %.2fs | Max Amplitude: %d | Chunks: %d | Samples: %zu | Recording time: %.2fs\n",
+            printf("[RECORDING] Name: %s | DateTime: %s | Last sound: %s | Silence: %.2fs | Max Amplitude: %d | Chunks: %d | Samples: %zu | Recording time: %.2fs\n",
+                   data->serial_name,
                    datetime_str,
                    last_sound_str,
                    silence_duration,
@@ -193,6 +198,7 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
                 time_t now = time(NULL);
                 struct tm *t = localtime(&now);
                 strftime(time_str, sizeof(time_str), "%Y%m%d_%H%M%S", t);
+
                 snprintf(filename, sizeof(filename), "%s_%s.wav", data->serial_name, time_str);
                 snprintf(final_file_path, sizeof(final_file_path), "%s/%s", RECORDING_DIRECTORY, filename);
 
@@ -243,6 +249,7 @@ int findInputDeviceByName(const char *name)
 
     return paNoDevice;
 }
+
 void recorder(const char *com_port)
 {
     PaError err;
@@ -261,11 +268,11 @@ void recorder(const char *com_port)
     data.live_listen = LIVE_LISTEN;
 
     const char *AUDIO_DEVICE_NAME = "All-In-One-Cable";
-    char *serial_name = open_serial_port(COM_PORT); 
-    snprintf(data.serial_name, sizeof(data.serial_name), "%s", serial_name ? serial_name : "unknown");
 
-    printf("Started recording on serial: %s\n", data.serial_name);
-    if (data.live_listen) {
+    snprintf(data.serial_name, sizeof(data.serial_name), "radio");
+
+    if (data.live_listen)
+    {
         printf("Live Listen ENABLED (Outputting to default speakers)\n");
     }
 
@@ -276,7 +283,6 @@ void recorder(const char *com_port)
         return;
     }
 
-    // --- INPUT PARAMETERS ---
     PaStreamParameters inputParams;
     int inputDeviceIndex = findInputDeviceByName(AUDIO_DEVICE_NAME);
 
@@ -286,16 +292,15 @@ void recorder(const char *com_port)
         Pa_Terminate();
         return;
     }
-    
+
     inputParams.device = inputDeviceIndex;
     inputParams.channelCount = CHANNELS;
     inputParams.sampleFormat = paInt16;
     inputParams.suggestedLatency = Pa_GetDeviceInfo(inputParams.device)->defaultLowInputLatency;
     inputParams.hostApiSpecificStreamInfo = NULL;
 
-    // --- OUTPUT PARAMETERS (NEW) ---
     PaStreamParameters outputParams;
-    PaStreamParameters *pOutputParams = NULL; // Pointer to pass to OpenStream
+    PaStreamParameters *pOutputParams = NULL;
 
     if (data.live_listen)
     {
@@ -311,19 +316,17 @@ void recorder(const char *com_port)
             outputParams.sampleFormat = paInt16;
             outputParams.suggestedLatency = Pa_GetDeviceInfo(outputParams.device)->defaultLowOutputLatency;
             outputParams.hostApiSpecificStreamInfo = NULL;
-            pOutputParams = &outputParams; // Set the pointer to our params
+            pOutputParams = &outputParams;
         }
     }
 
-    // --- OPEN STREAM ---
-    // Note: We pass pOutputParams (which is either &outputParams or NULL)
-    err = Pa_OpenStream(&stream, 
-                        &inputParams, 
-                        pOutputParams, // <--- Changed from NULL
-                        SAMPLE_RATE, 
-                        data.chunk_size, 
-                        paClipOff, 
-                        audioCallback, 
+    err = Pa_OpenStream(&stream,
+                        &inputParams,
+                        pOutputParams,
+                        SAMPLE_RATE,
+                        data.chunk_size,
+                        paClipOff,
+                        audioCallback,
                         &data);
 
     if (err != paNoError)

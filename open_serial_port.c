@@ -4,119 +4,95 @@
 #include <string.h>
 #include <unistd.h>
 #include <libserialport.h>
+#include <pthread.h>
 
-// Helper to duplicate the string so it can be safely returned and freed later
-static char *duplicate_string(const char *str)
+static char name_history[3][128] = {"radio", "radio", "radio"};
+static pthread_mutex_t radio_name_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+char *get_radio_name(void)
 {
-    char *dup = malloc(strlen(str) + 1);
+    pthread_mutex_lock(&radio_name_mutex);
+    char *dup = malloc(strlen(name_history[0]) + 1);
     if (dup)
-        strcpy(dup, str);
+        strcpy(dup, name_history[0]);
+    pthread_mutex_unlock(&radio_name_mutex);
     return dup;
 }
 
-char *open_serial_port(const char *com_port)
+void *serial_monitor_thread(void *arg)
 {
+    const char *com_port = (const char *)arg;
     struct sp_port *port;
-    enum sp_return ret;
 
-    // 1. Locate the port
-    ret = sp_get_port_by_name(com_port, &port);
-    if (ret != SP_OK)
-    {
-        fprintf(stderr, "Error: Could not find port %s\n", com_port);
-        return duplicate_string("radio");
-    }
+    printf("[Serial] Monitor thread starting. Looking for %s...\n", com_port);
 
-    // 2. Open the port
-    ret = sp_open(port, SP_MODE_READ);
-    if (ret != SP_OK)
-    {
-        fprintf(stderr, "Error: Could not open port %s\n", com_port);
-        sp_free_port(port);
-        return duplicate_string("radio");
-    }
-
-    // 3. Configure port settings (38400 Baud, 8-N-1)
-    ret = sp_set_baudrate(port, 38400);
-    if (ret != SP_OK)
-    {
-        fprintf(stderr, "Error: Could not set baud rate\n");
-        sp_close(port);
-        sp_free_port(port);
-        return duplicate_string("radio");
-    }
-    
-    ret = sp_set_bits(port, 8);
-    ret |= sp_set_parity(port, SP_PARITY_NONE);
-    ret |= sp_set_stopbits(port, 1);
-    ret |= sp_set_flowcontrol(port, SP_FLOWCONTROL_NONE);
-    
-    if (ret != SP_OK)
-    {
-        fprintf(stderr, "Error: Could not configure port parameters\n");
-        sp_close(port);
-        sp_free_port(port);
-        return duplicate_string("radio");
-    }
-
-    // Buffer to hold incoming data
-    char result[1024] = {0};
-    char buf[256];
-    int bytes_read = 0;
-
-    // 4. Read Loop
     while (1)
     {
-        ret = sp_nonblocking_read(port, buf, sizeof(buf) - 1);
-        
-        if (ret < 0)
+        if (sp_get_port_by_name(com_port, &port) == SP_OK)
         {
-            fprintf(stderr, "Error reading from port\n");
-            break;
-        }
-        else if (ret > 0)
-        {
-            bytes_read = ret;
-            buf[bytes_read] = '\0';
-
-            // Append new characters to our result buffer
-            strncat(result, buf, sizeof(result) - strlen(result) - 1);
-
-            // Check if the radio finished sending the name (signaled by '\n')
-            char *newline = strchr(result, '\n');
-            if (newline != NULL)
+            if (sp_open(port, SP_MODE_READ) == SP_OK)
             {
-                *newline = '\0'; // Terminate the string at the newline
+                sp_set_baudrate(port, 38400);
+                sp_set_bits(port, 8);
+                sp_set_parity(port, SP_PARITY_NONE);
+                sp_set_stopbits(port, 1);
+                sp_flush(port, SP_BUF_INPUT);
 
-                // Strip the Carriage Return ('\r') if it's there
-                int len = strlen(result);
-                if (len > 0 && result[len - 1] == '\r')
-                {
-                    result[len - 1] = '\0';
-                    len--;
-                }
+                char buf[1];
+                char word_buffer[128] = {0};
+                int idx = 0;
 
-                // If we got a valid, non-empty name, close port and return it
-                if (len > 0)
+                while (1)
                 {
-                    sp_close(port);
-                    sp_free_port(port);
-                    return duplicate_string(result);
+                    int bytes = sp_blocking_read(port, buf, 1, 20);
+
+                    if (bytes > 0)
+                    {
+                        if (buf[0] == '\n' || buf[0] == '\r')
+                        {
+                            if (idx > 0)
+                            {
+                                word_buffer[idx] = '\0';
+
+                                pthread_mutex_lock(&radio_name_mutex);
+                                strncpy(name_history[2], name_history[1], 128);
+                                strncpy(name_history[1], name_history[0], 128);
+                                strncpy(name_history[0], word_buffer, 128);
+                                pthread_mutex_unlock(&radio_name_mutex);
+                                idx = 0;
+                            }
+                        }
+                        else if (buf[0] >= 32 && buf[0] <= 126)
+                        {
+                            if (idx < sizeof(word_buffer) - 1)
+                                word_buffer[idx++] = buf[0];
+                        }
+                    }
+                    else if (bytes < 0)
+                    {
+                        printf("\n[Serial] ERROR: Connection lost.\n");
+                        break;
+                    }
+                    else
+                    {
+                        if (idx > 0)
+                        {
+                            word_buffer[idx] = '\0';
+
+                            pthread_mutex_lock(&radio_name_mutex);
+                            strncpy(name_history[2], name_history[1], 128);
+                            strncpy(name_history[1], name_history[0], 128);
+                            strncpy(name_history[0], word_buffer, 128);
+                            pthread_mutex_unlock(&radio_name_mutex);
+                            idx = 0;
+                        }
+                    }
                 }
-                else
-                {
-                    // If it was just an empty line, clear the buffer and keep waiting
-                    result[0] = '\0';
-                }
+                sp_close(port);
             }
+            sp_free_port(port);
         }
-
-        // Wait 100ms before checking the serial port again to save CPU usage
-        usleep(100000); 
+        sleep(1);
     }
-
-    // Fallback if the loop breaks
-    sp_close(port);
-    sp_free_port(port);
-    return duplicate_string("radio");
+    return NULL;
 }

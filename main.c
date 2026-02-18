@@ -13,6 +13,7 @@
 #include "h/telegramSend.h"
 #include "h/recordAudio.h"
 #include "h/config.h"
+#include "h/open_serial_port.h"
 
 static void silent_alsa_error(const char *file, int line, const char *function,
                               int err, const char *fmt, ...) {}
@@ -234,6 +235,12 @@ int main(void)
 
     send_existing_files(RECORDING_DIRECTORY);
 
+    if (pthread_create(&radio_thread_id, NULL, serial_monitor_thread, (void *)COM_PORT) != 0)
+    {
+        perror("Failed to create radio serial thread");
+        return 1;
+    }
+
     if (pthread_create(&recorder_thread_id, NULL, recorder_thread, NULL) != 0)
     {
         perror("Failed to create recorder thread");
@@ -248,6 +255,7 @@ int main(void)
 
     pthread_join(recorder_thread_id, NULL);
     pthread_join(monitor_thread_id, NULL);
+    pthread_join(radio_thread_id, NULL);
 
     printf("All files processed successfully.\n");
     return 0;
