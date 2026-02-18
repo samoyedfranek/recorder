@@ -35,7 +35,7 @@ cd "$WORKDIR" || { echo "Failed to cd to $WORKDIR"; exit 1; }
 
 # === Compile the recorder program ===
 echo "Compiling recorder..."
-if ! gcc -o recorder main.c open_serial_port.c recordAudio.c telegramSend.c config.c write_wav_file.c getRadioImage.c \
+if ! gcc -o recorder main.c open_serial_port.c recordAudio.c telegramSend.c config.c write_wav_file.c \
     -lportaudio -lm -lserialport -lpthread -lcurl -luv -lasound -ljack; then
     echo "Compilation failed."
     exit 1
