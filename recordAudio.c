@@ -194,7 +194,7 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
 
             if (data->size > 0)
             {
-                char filename[512], final_file_path[512], time_str[64];
+                char filename[512], final_file_path[1024], time_str[64];
                 time_t now = time(NULL);
                 struct tm *t = localtime(&now);
                 strftime(time_str, sizeof(time_str), "%Y%m%d_%H%M%S", t);
