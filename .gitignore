@@ -1,6 +1,7 @@
 .vscode/*
 old_version
 recorder.exe
+recorder
 .env
 .env
 .editorconfig
