@@ -245,7 +245,7 @@ int send_telegram_status(const char *bot_token, char **chat_ids, const char *mes
 
     for (int i = 0; chat_ids[i] != NULL; i++)
     {
-        char data[1024];
+        char data[2048];
         snprintf(data, sizeof(data),
                  "{\"chat_id\": \"%s\", \"text\": \"%s\", \"parse_mode\": \"MarkdownV2\"}",
                  chat_ids[i], message_escaped);
