@@ -6,6 +6,8 @@
 #include <regex.h>
 #include <stdio.h>
 #include <errno.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #include "h/config.h"
 
 void get_current_datetime(char *datetime_str, size_t size)
@@ -32,7 +34,6 @@ void extract_timestamp(const char *file_path, char *base_name, char *timestamp, 
     if (regexec(&regex, file_path, 3, matches, 0) == 0)
     {
         snprintf(base_name, base_size, "%.*s", (int)(matches[1].rm_eo - matches[1].rm_so), file_path + matches[1].rm_so);
-
         snprintf(timestamp, time_size, "%.*s", (int)(matches[2].rm_eo - matches[2].rm_so), file_path + matches[2].rm_so);
 
         char formatted_timestamp[32];
@@ -55,7 +56,8 @@ void extract_timestamp(const char *file_path, char *base_name, char *timestamp, 
     regfree(&regex);
 }
 
-int send_to_telegram(const char *file_path, const char *bot_token, char **chat_ids)
+// Internal unified sender handling retries and offline recovery logic
+static int send_to_telegram_internal(const char *file_path, const char *bot_token, char **chat_ids, bool is_offline)
 {
     CURL *curl;
     CURLcode res;
@@ -63,8 +65,12 @@ int send_to_telegram(const char *file_path, const char *bot_token, char **chat_i
     char base_name[256];
     char timestamp[32];
 
-    load_env(".env");
+    // Backup the original path to easily recover timestamped filename if connection fails
+    char original_path[512];
+    strncpy(original_path, file_path, sizeof(original_path) - 1);
+    original_path[sizeof(original_path) - 1] = '\0';
 
+    load_env(".env");
     extract_timestamp(file_path, base_name, timestamp, sizeof(base_name), sizeof(timestamp));
 
     char new_file_path[512];
@@ -84,31 +90,65 @@ int send_to_telegram(const char *file_path, const char *bot_token, char **chat_i
         return 0;
     }
 
-    curl_global_init(CURL_GLOBAL_DEFAULT);
-    curl = curl_easy_init();
-    if (!curl)
-    {
-        return 0;
-    }
+    int max_retries = 3;
+    int success = 0;
 
-    for (int i = 0; chat_ids[i] != NULL; i++)
+    for (int retry = 0; retry < max_retries; retry++)
     {
-        struct curl_mime *mime;
-        struct curl_mimepart *part;
-
-        if ("frame.png" != NULL && strlen("frame.png") > 0 && strcmp(COM_PORT, "false") != 0)
+        curl_global_init(CURL_GLOBAL_DEFAULT);
+        curl = curl_easy_init();
+        if (!curl)
         {
-            snprintf(url, sizeof(url), "https://api.telegram.org/bot%s/sendPhoto", bot_token);
+            sleep(1);
+            continue;
+        }
 
+        int all_chats_done = 1;
+        for (int i = 0; chat_ids[i] != NULL; i++)
+        {
+            struct curl_mime *mime;
+            struct curl_mimepart *part;
+
+            snprintf(url, sizeof(url), "https://api.telegram.org/bot%s/sendAudio", bot_token);
             mime = curl_mime_init(curl);
+
+            part = curl_mime_addpart(mime);
+            curl_mime_name(part, "audio");
+            curl_mime_filedata(part, new_file_path);
 
             part = curl_mime_addpart(mime);
             curl_mime_name(part, "chat_id");
             curl_mime_data(part, chat_ids[i], CURL_ZERO_TERMINATED);
 
-            part = curl_mime_addpart(mime);
-            curl_mime_name(part, "photo");
-            curl_mime_filedata(part, "frame.png");
+            if (timestamp[0] != '\0')
+            {
+                char escaped_caption[512];
+                escape_markdown_v2(escaped_caption, timestamp, sizeof(escaped_caption));
+
+                char escaped_extra[256] = "";
+                if (EXTRA_TEXT[0] != '\0')
+                    escape_markdown_v2(escaped_extra, EXTRA_TEXT, sizeof(escaped_extra));
+
+                char caption[1024];
+                char offline_tag[64] = "";
+                if (is_offline)
+                {
+                    strcpy(offline_tag, "\n*OFFLINE FILES*");
+                }
+
+                if (escaped_extra[0] != '\0')
+                    snprintf(caption, sizeof(caption), "%s\n*COŚ SIĘ DZIEJE*\n%s%s", escaped_caption, escaped_extra, offline_tag);
+                else
+                    snprintf(caption, sizeof(caption), "%s\n*COŚ SIĘ DZIEJE*%s", escaped_caption, offline_tag);
+
+                part = curl_mime_addpart(mime);
+                curl_mime_name(part, "caption");
+                curl_mime_data(part, caption, CURL_ZERO_TERMINATED);
+
+                part = curl_mime_addpart(mime);
+                curl_mime_name(part, "parse_mode");
+                curl_mime_data(part, "MarkdownV2", CURL_ZERO_TERMINATED);
+            }
 
             curl_easy_setopt(curl, CURLOPT_URL, url);
             curl_easy_setopt(curl, CURLOPT_MIMEPOST, mime);
@@ -117,66 +157,79 @@ int send_to_telegram(const char *file_path, const char *bot_token, char **chat_i
 
             if (res != CURLE_OK)
             {
-                fprintf(stderr, "Failed to send photo to chat %s: %s\n", chat_ids[i], curl_easy_strerror(res));
+                fprintf(stderr, "Failed to send audio %s to chat %s: %s (Attempt %d/%d)\n", new_file_path, chat_ids[i], curl_easy_strerror(res), retry + 1, max_retries);
+                all_chats_done = 0;
+                break;
             }
         }
 
-        snprintf(url, sizeof(url), "https://api.telegram.org/bot%s/sendAudio", bot_token);
+        curl_easy_cleanup(curl);
 
-        mime = curl_mime_init(curl);
-
-        part = curl_mime_addpart(mime);
-        curl_mime_name(part, "audio");
-        curl_mime_filedata(part, new_file_path);
-
-        part = curl_mime_addpart(mime);
-        curl_mime_name(part, "chat_id");
-        curl_mime_data(part, chat_ids[i], CURL_ZERO_TERMINATED);
-
-        if (timestamp[0] != '\0')
+        if (all_chats_done)
         {
-            char escaped_caption[512];
-            escape_markdown_v2(escaped_caption, timestamp, sizeof(escaped_caption));
-
-            char escaped_extra[256] = "";
-            if (EXTRA_TEXT[0] != '\0')
-                escape_markdown_v2(escaped_extra, EXTRA_TEXT, sizeof(escaped_extra));
-
-            char caption[1024];
-            if (escaped_extra[0] != '\0')
-                snprintf(caption, sizeof(caption), "%s\n*COŚ SIĘ DZIEJE*\n%s", escaped_caption, escaped_extra);
-            else
-                snprintf(caption, sizeof(caption), "%s\n*COŚ SIĘ DZIEJE*", escaped_caption);
-
-            part = curl_mime_addpart(mime);
-            curl_mime_name(part, "caption");
-            curl_mime_data(part, caption, CURL_ZERO_TERMINATED);
-
-            part = curl_mime_addpart(mime);
-            curl_mime_name(part, "parse_mode");
-            curl_mime_data(part, "MarkdownV2", CURL_ZERO_TERMINATED);
+            success = 1;
+            break;
         }
-
-        curl_easy_setopt(curl, CURLOPT_URL, url);
-        curl_easy_setopt(curl, CURLOPT_MIMEPOST, mime);
-        res = curl_easy_perform(curl);
-        curl_mime_free(mime);
-
-        if (res != CURLE_OK)
-        {
-            fprintf(stderr, "Failed to send audio %s to chat %s: %s\n", new_file_path, chat_ids[i], curl_easy_strerror(res));
-            curl_easy_cleanup(curl);
-            return 0;
-        }
+        sleep(2); // Wait briefly before trying again
     }
 
-    if (remove(new_file_path) != 0)
+    if (success)
     {
-        fprintf(stderr, "Failed to remove file %s: %s\n", new_file_path, strerror(errno));
+        if (remove(new_file_path) != 0)
+        {
+            fprintf(stderr, "Failed to remove processed file %s: %s\n", new_file_path, strerror(errno));
+        }
+        return 1;
     }
+    else
+    {
+        // Recovery Logic: If transmission completely fails, put it into the offline fallback cache
+        if (!is_offline)
+        {
+            struct stat st = {0};
+            if (stat("./offline", &st) == -1)
+            {
+                mkdir("./offline", 0700);
+            }
 
-    curl_easy_cleanup(curl);
-    return 1;
+            const char *filename_only = strrchr(original_path, '/');
+            if (filename_only)
+                filename_only++;
+            else
+                filename_only = original_path;
+
+            char offline_path[512];
+            snprintf(offline_path, sizeof(offline_path), "./offline/%s", filename_only);
+
+            if (rename(new_file_path, offline_path) == 0)
+            {
+                printf("[OFFLINE] Connection down. Recovered and saved to cache: %s\n", offline_path);
+            }
+            else
+            {
+                fprintf(stderr, "Failed to move file to offline folder: %s\n", strerror(errno));
+            }
+        }
+        else
+        {
+            // Already an offline file; rename it back to its original timestamped state to try later
+            if (rename(new_file_path, original_path) != 0)
+            {
+                fprintf(stderr, "Failed to restore offline file name: %s\n", strerror(errno));
+            }
+        }
+        return 0;
+    }
+}
+
+int send_to_telegram(const char *file_path, const char *bot_token, char **chat_ids)
+{
+    return send_to_telegram_internal(file_path, bot_token, chat_ids, false);
+}
+
+int send_offline_to_telegram(const char *file_path, const char *bot_token, char **chat_ids)
+{
+    return send_to_telegram_internal(file_path, bot_token, chat_ids, true);
 }
 
 void escape_markdown_v2(char *dest, const char *src, size_t size)

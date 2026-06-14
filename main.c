@@ -15,6 +15,9 @@
 #include "h/config.h"
 #include "h/open_serial_port.h"
 
+// Declaration for our offline upload function
+extern int send_offline_to_telegram(const char *file_path, const char *bot_token, char **chat_ids);
+
 static void silent_alsa_error(const char *file, int line, const char *function,
                               int err, const char *fmt, ...) {}
 
@@ -42,6 +45,98 @@ int create_directory_if_not_exists(const char *dir_path)
         printf("Directory created: %s\n", dir_path);
     }
     return 0;
+}
+
+// Alphabetical compare for qsort (ensures chronological sequence since layout is YYYYMMDD_HHMMSS)
+int compare_strings(const void *a, const void *b)
+{
+    return strcmp(*(const char **)a, *(const char **)b);
+}
+
+void process_offline_files(void)
+{
+    DIR *dir = opendir("./offline");
+    if (!dir)
+        return;
+
+    struct dirent *entry;
+    char **files = NULL;
+    int count = 0;
+    int capacity = 10;
+
+    files = malloc(capacity * sizeof(char *));
+    if (!files)
+    {
+        closedir(dir);
+        return;
+    }
+
+    while ((entry = readdir(dir)) != NULL)
+    {
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
+            continue;
+        if (strstr(entry->d_name, ".wav") == NULL)
+            continue;
+
+        if (count >= capacity)
+        {
+            capacity *= 2;
+            char **temp = realloc(files, capacity * sizeof(char *));
+            if (!temp)
+            {
+                for (int i = 0; i < count; i++) free(files[i]);
+                free(files);
+                closedir(dir);
+                return;
+            }
+            files = temp;
+        }
+
+        files[count] = strdup(entry->d_name);
+        if (files[count])
+        {
+            count++;
+        }
+    }
+    closedir(dir);
+
+    if (count > 0)
+    {
+        // Sort files sequentially from oldest to newest
+        qsort(files, count, sizeof(char *), compare_strings);
+
+        printf("[OFFLINE SYNC] Found %d backlogged files. Syncing...\n", count);
+
+        for (int i = 0; i < count; i++)
+        {
+            char full_path[512];
+            snprintf(full_path, sizeof(full_path), "./offline/%s", files[i]);
+
+            if (send_offline_to_telegram(full_path, BOT_TOKEN, CHAT_IDS))
+            {
+                printf("[OFFLINE SYNC] Successfully dispatched backlogged file: %s\n", files[i]);
+            }
+            else
+            {
+                printf("[OFFLINE SYNC] Internet is still down. Stopping pipeline sync execution.\n");
+                for (int j = i; j < count; j++) free(files[j]);
+                break;
+            }
+            free(files[i]);
+        }
+    }
+
+    free(files);
+}
+
+void *offline_sync_thread(void *arg)
+{
+    while (1)
+    {
+        sleep(30); // Checks the offline directory every 30 seconds
+        process_offline_files();
+    }
+    return NULL;
 }
 
 void send_existing_files(const char *directory)
@@ -230,10 +325,16 @@ int main(void)
     {
         return 1;
     }
+    
+    // Ensure offline directory is up and ready
+    create_directory_if_not_exists("./offline");
 
-    pthread_t recorder_thread_id, monitor_thread_id, radio_thread_id;
+    pthread_t recorder_thread_id, monitor_thread_id, radio_thread_id, offline_thread_id;
 
     send_existing_files(RECORDING_DIRECTORY);
+    
+    // Process any remaining offline files from previous execution cycles
+    process_offline_files();
 
     if (pthread_create(&radio_thread_id, NULL, serial_monitor_thread, (void *)COM_PORT) != 0)
     {
@@ -253,9 +354,17 @@ int main(void)
         return 1;
     }
 
+    // Launch background queue worker
+    if (pthread_create(&offline_thread_id, NULL, offline_sync_thread, NULL) != 0)
+    {
+        perror("Failed to create offline synchronization thread");
+        return 1;
+    }
+
     pthread_join(recorder_thread_id, NULL);
     pthread_join(monitor_thread_id, NULL);
     pthread_join(radio_thread_id, NULL);
+    pthread_join(offline_thread_id, NULL);
 
     printf("All files processed successfully.\n");
     return 0;
