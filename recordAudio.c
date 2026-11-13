@@ -95,11 +95,11 @@ static short process_audio_sample(AudioData *data, short input)
                                             : data->envelope_release;
     data->signal_envelope += envelope_coefficient * (magnitude - data->signal_envelope);
 
-    double target_gain = 6000.0 / (data->signal_envelope + 1.0);
-    if (target_gain < 0.25)
-        target_gain = 0.25;
-    else if (target_gain > 8.0)
-        target_gain = 8.0;
+    double target_gain = 10000.0 / (data->signal_envelope + 1.0);
+    if (target_gain < 0.5)
+        target_gain = 0.5;
+    else if (target_gain > 32.0)
+        target_gain = 32.0;
 
     const double gain_coefficient = target_gain < data->gain
                                         ? data->envelope_attack
@@ -358,10 +358,10 @@ void recorder(const char *com_port)
     data.live_listen = LIVE_LISTEN;
     data.gain = 1.0;
     data.envelope_attack = 1.0 - exp(-1.0 / (0.010 * SAMPLE_RATE));
-    data.envelope_release = 1.0 - exp(-1.0 / (0.300 * SAMPLE_RATE));
-    data.gain_release = 1.0 - exp(-1.0 / (0.500 * SAMPLE_RATE));
-    initialize_biquad(&data.high_pass, 1, 250.0);
-    initialize_biquad(&data.low_pass, 0, 3400.0);
+    data.envelope_release = 1.0 - exp(-1.0 / (0.200 * SAMPLE_RATE));
+    data.gain_release = 1.0 - exp(-1.0 / (0.350 * SAMPLE_RATE));
+    initialize_biquad(&data.high_pass, 1, 180.0);
+    initialize_biquad(&data.low_pass, 0, 4200.0);
 
     const char *AUDIO_DEVICE_NAME = "All-In-One-Cable";
 
