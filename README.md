@@ -40,6 +40,18 @@ EXTRA_TEXT=ez
 
 Replace the values with your actual configuration.
 
+## 🎙 Audio quality
+
+The recorder automatically filters the audio to emphasize the voice range and
+adjusts its gain as the signal gets quieter or louder. The same processing is
+used for saved recordings and live listening, so you should not need to adjust
+the volume for each conversation.
+
+Automatic gain cannot repair audio that is already distorted or clipped by the
+radio or audio adapter. If that happens, lower the radio's output level enough
+to avoid distortion at the input; the recorder will still level the remaining
+volume differences automatically.
+
 ---
 
 ## 🛠 Service

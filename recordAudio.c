@@ -19,6 +19,13 @@
 
 typedef struct
 {
+    double b0, b1, b2;
+    double a1, a2;
+    double z1, z2;
+} Biquad;
+
+typedef struct
+{
     short *buffer;
     size_t size;
     size_t capacity;
@@ -33,7 +40,80 @@ typedef struct
     size_t prebuffer_index;
     int prebuffer_full;
     int live_listen;
+    Biquad high_pass;
+    Biquad low_pass;
+    double signal_envelope;
+    double gain;
+    double envelope_attack;
+    double envelope_release;
+    double gain_release;
 } AudioData;
+
+static void initialize_biquad(Biquad *filter, int high_pass, double cutoff)
+{
+    const double pi = 3.14159265358979323846;
+    const double omega = 2.0 * pi * cutoff / SAMPLE_RATE;
+    const double cosine = cos(omega);
+    const double alpha = sin(omega) / (2.0 * 0.7071067811865476);
+    const double a0 = 1.0 + alpha;
+
+    if (high_pass)
+    {
+        filter->b0 = ((1.0 + cosine) / 2.0) / a0;
+        filter->b1 = (-(1.0 + cosine)) / a0;
+        filter->b2 = ((1.0 + cosine) / 2.0) / a0;
+    }
+    else
+    {
+        filter->b0 = ((1.0 - cosine) / 2.0) / a0;
+        filter->b1 = (1.0 - cosine) / a0;
+        filter->b2 = ((1.0 - cosine) / 2.0) / a0;
+    }
+
+    filter->a1 = (-2.0 * cosine) / a0;
+    filter->a2 = (1.0 - alpha) / a0;
+    filter->z1 = 0.0;
+    filter->z2 = 0.0;
+}
+
+static double process_biquad(Biquad *filter, double input)
+{
+    const double output = filter->b0 * input + filter->z1;
+    filter->z1 = filter->b1 * input - filter->a1 * output + filter->z2;
+    filter->z2 = filter->b2 * input - filter->a2 * output;
+    return output;
+}
+
+static short process_audio_sample(AudioData *data, short input)
+{
+    double sample = process_biquad(&data->high_pass, input);
+    sample = process_biquad(&data->low_pass, sample);
+
+    const double magnitude = fabs(sample);
+    const double envelope_coefficient = magnitude > data->signal_envelope
+                                            ? data->envelope_attack
+                                            : data->envelope_release;
+    data->signal_envelope += envelope_coefficient * (magnitude - data->signal_envelope);
+
+    double target_gain = 6000.0 / (data->signal_envelope + 1.0);
+    if (target_gain < 0.25)
+        target_gain = 0.25;
+    else if (target_gain > 8.0)
+        target_gain = 8.0;
+
+    const double gain_coefficient = target_gain < data->gain
+                                        ? data->envelope_attack
+                                        : data->gain_release;
+    data->gain += gain_coefficient * (target_gain - data->gain);
+
+    sample *= data->gain;
+    if (sample > 30000.0)
+        sample = 30000.0;
+    else if (sample < -30000.0)
+        sample = -30000.0;
+
+    return (short)sample;
+}
 
 static int audioCallback(const void *inputBuffer, void *outputBuffer,
                          unsigned long framesPerBuffer,
@@ -45,31 +125,13 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
     const short *input = (const short *)inputBuffer;
     short *output = (short *)outputBuffer;
 
-    if (output)
-    {
-        if (data->live_listen && input)
-        {
-            memcpy(output, input, framesPerBuffer * sizeof(short));
-        }
-        else
-        {
-            memset(output, 0, framesPerBuffer * sizeof(short));
-        }
-    }
-
     if (!input)
     {
+        if (output)
+            memset(output, 0, framesPerBuffer * sizeof(short));
         fprintf(stderr, "No input detected!\n");
         return paContinue;
     }
-
-    for (unsigned int i = 0; i < framesPerBuffer; i++)
-    {
-        data->prebuffer[data->prebuffer_index] = input[i];
-        data->prebuffer_index = (data->prebuffer_index + 1) % PREBUFFER_SIZE;
-    }
-    if (data->prebuffer_index == 0)
-        data->prebuffer_full = 1;
 
     int max_amplitude = 0;
     for (unsigned int i = 0; i < framesPerBuffer; i++)
@@ -103,7 +165,7 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
         }
 
         size_t pre_count = data->prebuffer_full ? PREBUFFER_SIZE : data->prebuffer_index;
-        size_t start_index = data->prebuffer_index;
+        size_t start_index = data->prebuffer_full ? data->prebuffer_index : 0;
 
         int start_offset = -1;
         for (size_t i = 0; i < pre_count; i++)
@@ -132,17 +194,31 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
     {
         if (data->size + framesPerBuffer > data->capacity)
         {
-            data->capacity *= 2;
-            data->buffer = realloc(data->buffer, data->capacity * sizeof(short));
-            if (!data->buffer)
+            size_t new_capacity = data->capacity;
+            while (new_capacity < data->size + framesPerBuffer)
+                new_capacity *= 2;
+            short *new_buffer = realloc(data->buffer, new_capacity * sizeof(short));
+            if (!new_buffer)
             {
                 fprintf(stderr, "Memory reallocation failed!\n");
                 return paAbort;
             }
+            data->buffer = new_buffer;
+            data->capacity = new_capacity;
         }
 
-        memcpy(data->buffer + data->size, input, framesPerBuffer * sizeof(short));
-        data->size += framesPerBuffer;
+        for (unsigned long i = 0; i < framesPerBuffer; i++)
+        {
+            const short processed_sample = process_audio_sample(data, input[i]);
+            data->prebuffer[data->prebuffer_index] = processed_sample;
+            data->prebuffer_index = (data->prebuffer_index + 1) % PREBUFFER_SIZE;
+            if (data->prebuffer_index == 0)
+                data->prebuffer_full = 1;
+
+            if (output)
+                output[i] = data->live_listen ? processed_sample : 0;
+            data->buffer[data->size++] = processed_sample;
+        }
         data->recording_total_chunks++;
 
         data->recording_check_counter++;
@@ -223,6 +299,20 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
             data->recording = 0;
         }
     }
+    else
+    {
+        for (unsigned long i = 0; i < framesPerBuffer; i++)
+        {
+            const short processed_sample = process_audio_sample(data, input[i]);
+            data->prebuffer[data->prebuffer_index] = processed_sample;
+            data->prebuffer_index = (data->prebuffer_index + 1) % PREBUFFER_SIZE;
+            if (data->prebuffer_index == 0)
+                data->prebuffer_full = 1;
+
+            if (output)
+                output[i] = data->live_listen ? processed_sample : 0;
+        }
+    }
     return paContinue;
 }
 
@@ -266,6 +356,12 @@ void recorder(const char *com_port)
     data.chunk_size = CHUNK_SIZE;
     data.recording_total_chunks = 0;
     data.live_listen = LIVE_LISTEN;
+    data.gain = 1.0;
+    data.envelope_attack = 1.0 - exp(-1.0 / (0.010 * SAMPLE_RATE));
+    data.envelope_release = 1.0 - exp(-1.0 / (0.300 * SAMPLE_RATE));
+    data.gain_release = 1.0 - exp(-1.0 / (0.500 * SAMPLE_RATE));
+    initialize_biquad(&data.high_pass, 1, 250.0);
+    initialize_biquad(&data.low_pass, 0, 3400.0);
 
     const char *AUDIO_DEVICE_NAME = "All-In-One-Cable";
 
