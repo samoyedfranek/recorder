@@ -46,6 +46,8 @@ The recorder filters the audio to emphasize speech and automatically adjusts
 its gain as the signal gets quieter or louder (up to 32x amplification). The
 same processing is used for saved recordings and live listening. This can make
 weak conversations louder, but it can also make radio static more noticeable.
+Live listening is muted when the raw input falls below the configured
+`AMPLITUDE_THRESHOLD`, with a 250 ms hold to avoid cutting off word endings.
 
 Automatic gain cannot restore speech detail that the radio did not receive, or
 remove static that masks the speech. It also cannot repair audio already

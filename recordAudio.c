@@ -47,6 +47,7 @@ typedef struct
     double envelope_attack;
     double envelope_release;
     double gain_release;
+    size_t live_gate_hold_samples;
 } AudioData;
 
 static void initialize_biquad(Biquad *filter, int high_pass, double cutoff)
@@ -115,6 +116,23 @@ static short process_audio_sample(AudioData *data, short input)
     return (short)sample;
 }
 
+static short live_output_sample(AudioData *data, short sample, int signal_detected)
+{
+    if (!data->live_listen)
+        return 0;
+
+    if (signal_detected)
+    {
+        data->live_gate_hold_samples = SAMPLE_RATE / 4;
+    }
+    else if (data->live_gate_hold_samples > 0)
+    {
+        data->live_gate_hold_samples--;
+    }
+
+    return signal_detected || data->live_gate_hold_samples > 0 ? sample : 0;
+}
+
 static int audioCallback(const void *inputBuffer, void *outputBuffer,
                          unsigned long framesPerBuffer,
                          const PaStreamCallbackTimeInfo *timeInfo,
@@ -141,8 +159,9 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
             max_amplitude = sample;
     }
     time_t current_time = time(NULL);
+    const int live_signal_detected = max_amplitude > data->amplitude_threshold;
 
-    if (max_amplitude > data->amplitude_threshold && !data->recording)
+    if (live_signal_detected && !data->recording)
     {
         data->recording = 1;
         data->recording_check_counter = 0;
@@ -216,7 +235,7 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
                 data->prebuffer_full = 1;
 
             if (output)
-                output[i] = data->live_listen ? processed_sample : 0;
+                output[i] = live_output_sample(data, processed_sample, live_signal_detected);
             data->buffer[data->size++] = processed_sample;
         }
         data->recording_total_chunks++;
@@ -249,7 +268,7 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
                    recording_time_sec);
         }
 
-        if (max_amplitude > data->amplitude_threshold)
+        if (live_signal_detected)
         {
             data->last_sound_time = current_time;
         }
@@ -310,7 +329,7 @@ static int audioCallback(const void *inputBuffer, void *outputBuffer,
                 data->prebuffer_full = 1;
 
             if (output)
-                output[i] = data->live_listen ? processed_sample : 0;
+                output[i] = live_output_sample(data, processed_sample, live_signal_detected);
         }
     }
     return paContinue;
